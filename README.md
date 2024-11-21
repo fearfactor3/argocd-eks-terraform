@@ -19,7 +19,12 @@ This repository contains Terraform configurations to set up an Amazon EKS (Elast
 │   │   ├── outputs.tf
 │   │   ├── variables.tf
 │   │   └── versions.tf
-│   └── network
+│   ├── network
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── variables.tf
+│   │   └── versions.tf
+│   └── prometheus
 │       ├── main.tf
 │       ├── outputs.tf
 │       ├── variables.tf
@@ -70,6 +75,7 @@ The network module sets up the VPC, subnets, and related networking resources.
 - **Variables:**
   - `vpc_cidr`: CIDR block for the VPC
   - `public_subnets`: List of CIDR blocks for the public subnets
+  - `private_subnets`: LIst of CIDR blocks for the private subnets
   - `azs`: List of availability zones
   - `project_name`: Name of the project
 
@@ -100,6 +106,20 @@ The Argo CD module sets up Argo CD using Helm.
   - `namespace`: Namespace to install Argo CD into
   - `create_namespace`: Whether to create the namespace if it doesn't exist
   - `helm_repo_url`: Helm repository URL for Argo CD
+  - `chart_name`: Name of the Helm chart to install
+  - `chart_version`: Version of the Helm chart
+  - `values`: Custom values to override Helm chart defaults
+
+### Prometheus Module
+
+The Prometheus module sets up Prometheus using Helm.
+
+- **Source:** `./modules/prometheus`
+- **Variables:**
+  - `release_name`: Name of the Helm release for Prometheus
+  - `namespace`: Namespace to install Prometheus into
+  - `create_namespace`: Whether to create the namespace if it doesn't exist
+  - `helm_repo_url`: Helm repository URL for Prometheus
   - `chart_name`: Name of the Helm chart to install
   - `chart_version`: Version of the Helm chart
   - `values`: Custom values to override Helm chart defaults

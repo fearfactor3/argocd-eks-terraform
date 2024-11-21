@@ -1,14 +1,15 @@
 module "network" {
-  source         = "./modules/network"
-  vpc_cidr       = "x.x.x.x" # CHANGE THIS
-  public_subnets = ["x.x.x.x"] # CHANGE THIS
-  azs            = ["us-east-1a", "us-east-1b"] # CHANGE THIS
-  project_name   = "argocd" 
+  source          = "./modules/network"
+  vpc_cidr        = "10.0.0.0/16"                  # CHANGE THIS
+  public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"] # CHANGE THIS
+  private_subnets = ["10.0.3.0/24", "10.0.4.0/24"] # CHANGE THIS
+  azs             = ["us-east-1a", "us-east-1b"]   # CHANGE THIS
+  project_name    = "argocd"
 }
 
 module "eks_cluster" {
   source                      = "./modules/eks"
-  aws_region                  = "us-east-1" 
+  aws_region                  = "us-east-1"
   cluster_name                = "argocd-cluster"
   cluster_version             = "1.30"
   vpc_id                      = module.network.vpc_id
@@ -38,4 +39,22 @@ module "argo-cd" {
     "server.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type" = "nlb"
   }
   depends_on = [module.eks_cluster]
+}
+
+module "prometheus" {
+  source           = "./modules/prometheus"
+  release_name     = "prometheus"
+  helm_repo_url    = "https://prometheus-community.github.io/helm-charts"
+  chart_name       = "kube-prometheus-stack"
+  chart_version    = "66.2.1"
+  namespace        = "prometheus"
+  create_namespace = true
+
+  values = {
+    "podSecurityPolicy.enabled" = true
+    "server.persistentVolume.enabled" = true
+    "grafana.service.type" = "LoadBalancer"
+    "prometheus.service.type" = "LoadBalancer"
+  }
+  depends_on = [module.argo-cd]
 }

@@ -49,7 +49,7 @@ data "aws_iam_policy_document" "eks_cluster_assume_role_policy" {
       type        = "Service"
       identifiers = ["eks.amazonaws.com"]
     }
-    actions = ["sts:AssumeROle"]
+    actions = ["sts:AssumeRole"]
   }
 }
 
@@ -93,7 +93,7 @@ data "aws_iam_policy_document" "eks_node_assume_role_policy" {
       type        = "Service"
       identifiers = ["ec2.amazonaws.com"]
     }
-    actions = ["sts:AssumeROle"]
+    actions = ["sts:AssumeRole"]
   }
 }
 
