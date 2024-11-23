@@ -51,10 +51,10 @@ module "prometheus" {
   create_namespace = true
 
   values = {
-    "podSecurityPolicy.enabled" = true
+    "podSecurityPolicy.enabled"       = true
     "server.persistentVolume.enabled" = true
-    "grafana.service.type" = "LoadBalancer"
-    "prometheus.service.type" = "LoadBalancer"
+    "grafana.service.type"            = "LoadBalancer"
+    "prometheus.service.type"         = "LoadBalancer"
   }
   depends_on = [module.argo-cd]
 }
