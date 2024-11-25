@@ -12,25 +12,22 @@ This repository contains Terraform configurations to set up an Amazon EKS (Elast
 │   ├── argo-cd
 │   │   ├── main.tf
 │   │   ├── outputs.tf
-│   │   ├── variables.tf
-│   │   └── versions.tf
+│   │   └── variables.tf
 │   ├── eks
 │   │   ├── main.tf
 │   │   ├── outputs.tf
-│   │   ├── variables.tf
-│   │   └── versions.tf
+│   │   └── variables.tf
 │   ├── network
 │   │   ├── main.tf
 │   │   ├── outputs.tf
-│   │   ├── variables.tf
-│   │   └── versions.tf
+│   │   └── variables.tf
 │   └── prometheus
 │       ├── main.tf
 │       ├── outputs.tf
-│       ├── variables.tf
-│       └── versions.tf
+│       └── variables.tf
 ├── outputs.tf
 ├── providers.tf
+└── versions.tf
 ```
 
 ## Prerequisites
