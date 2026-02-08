@@ -8,16 +8,10 @@ resource "helm_release" "prometheus" {
 
   timeout = var.timeout
 
-  dynamic "set" {
-    for_each = var.values
-    content {
-      name  = set.key
-      value = set.value
-    }
-  }
+  values = var.values
 }
 
-data "kubernetes_service" "prometheus_server" {
+data "kubernetes_service_v1" "prometheus_server" {
   metadata {
     name      = "prometheus-server"
     namespace = helm_release.prometheus.namespace

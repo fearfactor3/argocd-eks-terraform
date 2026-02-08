@@ -12,7 +12,7 @@ output "argocd_release_namespace" {
 }
 
 output "eks_connect" {
-  value = "aws eks update-kubeconfig --region us-east-1 --name ${module.eks_cluster.eks_cluster_name}"
+  value = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks_cluster.eks_cluster_name}"
 }
 
 output "argocd_initial_admin_secret" {

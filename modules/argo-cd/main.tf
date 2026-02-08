@@ -6,16 +6,10 @@ resource "helm_release" "argocd" {
   namespace        = var.namespace
   create_namespace = var.create_namespace
 
-  dynamic "set" {
-    for_each = var.values
-    content {
-      name  = set.key
-      value = set.value
-    }
-  }
+  values = var.values
 }
 
-data "kubernetes_service" "argocd_server" {
+data "kubernetes_service_v1" "argocd_server" {
   metadata {
     name      = "argocd-server"
     namespace = helm_release.argocd.namespace

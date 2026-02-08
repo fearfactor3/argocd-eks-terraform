@@ -1,11 +1,11 @@
 variable "release_name" {
-  description = "Name of the Helm release for Argo CD"
+  description = "Name of the Helm release for Prometheus"
   type        = string
   default     = "prometheus"
 }
 
 variable "namespace" {
-  description = "Namespace to install Argo CD into"
+  description = "Namespace to install Prometheus into"
   type        = string
   default     = "prometheus"
 }
@@ -23,7 +23,7 @@ variable "timeout" {
 }
 
 variable "helm_repo_url" {
-  description = "Helm repository URL for Argo CD"
+  description = "Helm repository URL for Prometheus"
   type        = string
   default     = "https://prometheus-community.github.io/helm-charts"
 }
@@ -37,16 +37,11 @@ variable "chart_name" {
 variable "chart_version" {
   description = "Version of the Helm chart"
   type        = string
-  default     = "62.3.1"
+  default     = "81.5.0"
 }
 
 variable "values" {
-  description = "Custom values to override Helm chart defaults"
-  type        = map(string)
-  default = {
-    "podSecurityPolicy.enabled"       = true
-    "server.persistentVolume.enabled" = true
-    "grafana.service.type"            = "LoadBalancer"
-    "prometheus.service.type"         = "LoadBalancer"
-  }
+  description = "List of YAML values to override Helm chart defaults"
+  type        = list(string)
+  default     = []
 }

@@ -2,10 +2,6 @@ locals {
   policies = ["arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy", "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy", "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"]
 }
 
-provider "aws" {
-  region = var.aws_region
-}
-
 # Create the EKS cluster
 resource "aws_eks_cluster" "eks_cluster" {
   name     = var.cluster_name
@@ -13,7 +9,10 @@ resource "aws_eks_cluster" "eks_cluster" {
   version  = var.cluster_version
 
   vpc_config {
-    subnet_ids = var.subnet_ids
+    subnet_ids              = var.subnet_ids
+    security_group_ids      = [aws_security_group.eks_cluster.id]
+    endpoint_private_access = true
+    endpoint_public_access  = true
   }
 
   tags = var.tags
@@ -97,13 +96,29 @@ data "aws_iam_policy_document" "eks_node_assume_role_policy" {
   }
 }
 
-resource "aws_iam_role_policy_attachment" "eks_service_policy" {
-  role       = aws_iam_role.eks_cluster_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
-}
-
 resource "aws_iam_role_policy_attachment" "eks_role_attachment" {
   for_each   = toset(local.policies)
   role       = aws_iam_role.eks_node_role.name
   policy_arn = each.value
+}
+
+# EKS Managed Add-ons
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name = aws_eks_cluster.eks_cluster.name
+  addon_name   = "vpc-cni"
+  tags         = var.tags
+}
+
+resource "aws_eks_addon" "coredns" {
+  cluster_name = aws_eks_cluster.eks_cluster.name
+  addon_name   = "coredns"
+  tags         = var.tags
+
+  depends_on = [aws_eks_node_group.eks_node_group]
+}
+
+resource "aws_eks_addon" "kube_proxy" {
+  cluster_name = aws_eks_cluster.eks_cluster.name
+  addon_name   = "kube-proxy"
+  tags         = var.tags
 }

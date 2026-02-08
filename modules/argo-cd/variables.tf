@@ -31,14 +31,11 @@ variable "chart_name" {
 variable "chart_version" {
   description = "Version of the Helm chart"
   type        = string
-  default     = "7.7.1"
+  default     = "9.4.1"
 }
 
 variable "values" {
-  description = "Custom values to override Helm chart defaults"
-  type        = map(string)
-  default = {
-    "server.service.type"                                                                = "LoadBalancer"
-    "server.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type" = "nlb"
-  }
+  description = "List of YAML values to override Helm chart defaults"
+  type        = list(string)
+  default     = []
 }
