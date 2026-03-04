@@ -22,3 +22,8 @@ variable "project_name" {
   description = "Name of the project"
   type        = string
 }
+
+variable "cluster_name" {
+  description = "Name of the EKS cluster, used for Kubernetes subnet tags"
+  type        = string
+}

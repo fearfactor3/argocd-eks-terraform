@@ -11,9 +11,10 @@ resource "helm_release" "prometheus" {
   values = var.values
 }
 
-data "kubernetes_service_v1" "prometheus_server" {
+data "kubernetes_service_v1" "grafana" {
   metadata {
-    name      = "prometheus-server"
+    name      = "${helm_release.prometheus.name}-grafana"
     namespace = helm_release.prometheus.namespace
   }
 }
+
