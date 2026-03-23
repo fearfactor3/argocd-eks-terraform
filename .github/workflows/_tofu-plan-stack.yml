@@ -69,7 +69,7 @@ jobs:
           SPACELIFT_API_KEY_SECRET: ${{ secrets.SPACELIFT_API_KEY_SECRET }}
         run: |
           set -euo pipefail
-          OUTPUTS=$(spacectl stack output list --id "${{ inputs.spacelift_dep_stack }}" --format json)
+          OUTPUTS=$(spacectl stack outputs --id "${{ inputs.spacelift_dep_stack }}" --output json)
           if [[ "${{ inputs.stack_name }}" == "eks" ]]; then
             {
               echo "TF_VAR_vpc_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_id") | .value')"
