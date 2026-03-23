@@ -24,7 +24,6 @@ repos:
       - id: terraform_tflint
         args:
           - --args=--config=__GIT_WORKING_DIR__/.github/linters/.tflint.hcl
-      - id: terraform_validate
 
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
     rev: f27534437637938638df8c33813df3b8a7d31411 # v9.24.0

@@ -1,0 +1,42 @@
+extends:
+  - '@commitlint/config-conventional'
+
+helpUrl: https://github.com/fearfactor3/argocd-eks-terraform#commit-message-format
+
+# Allowed types
+# fix | feat | docs | style | refactor | test | chore | ci
+#
+# Allowed scopes
+# network   - VPC, subnets, NAT gateway, route tables
+# eks       - EKS cluster, node group, IAM roles, add-ons
+# argo-cd   - Argo CD Helm release
+# prometheus - kube-prometheus-stack Helm release
+# iam       - GitHub Actions OIDC provider and plan role
+# spacelift - Spacelift stack definitions
+# ci        - GitHub Actions workflows and MegaLinter config
+# deps      - Dependency updates (Renovate, pre-commit hooks)
+# docs      - README and documentation
+# modules   - Cross-cutting changes spanning multiple modules
+# stacks    - Cross-cutting changes spanning multiple stacks
+#
+# Examples
+# feat(eks): add KMS key policy for secrets encryption
+# fix(network): restrict default security group egress
+# ci(megalinter): move trivy and checkov into MegaLinter
+# chore(deps): bump setup-opentofu to v2.0.1
+# docs(readme): update repository structure tree
+
+rules:
+  type-enum:
+    - 2
+    - always
+    - [fix, feat, docs, style, refactor, test, chore, ci]
+
+  scope-enum:
+    - 2
+    - always
+    - [network, eks, argo-cd, prometheus, iam, spacelift, ci, deps, docs, modules, stacks]
+
+  scope-empty:
+    - 2
+    - never

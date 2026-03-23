@@ -1,0 +1,131 @@
+name: "[reusable] OpenTofu Plan Stack"
+
+on:
+  workflow_call:
+    inputs:
+      stack_name:
+        description: "Stack name (matches stacks/<name>/)"
+        required: true
+        type: string
+      tofu_version:
+        description: "OpenTofu version constraint"
+        required: false
+        type: string
+        default: "~1.10"
+      aws_region:
+        description: "AWS region"
+        required: false
+        type: string
+        default: "us-east-1"
+      spacelift_dep_stack:
+        description: "Spacelift stack ID to fetch cross-stack outputs from (empty = skip)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+      SPACELIFT_API_KEY_ID:
+        required: false
+      SPACELIFT_API_KEY_SECRET:
+        required: false
+    outputs:
+      plan_summary:
+        description: "Single-line plan summary (Plan: X to add... or No changes.)"
+        value: ${{ jobs.plan.outputs.plan_summary }}
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: "true"
+    outputs:
+      plan_summary: ${{ steps.extract.outputs.plan_summary }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@fc711fa910b93cba0f3fbecaafc9f42fd0c411cb # v2.0.0
+        with:
+          tofu_version: ${{ inputs.tofu_version }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Setup spacectl
+        if: inputs.spacelift_dep_stack != ''
+        uses: spacelift-io/setup-spacectl@d0e2c81467c31a68af60db5b1f9f1f54f79cab96 # v2.0.0
+
+      - name: Fetch cross-stack outputs
+        if: inputs.spacelift_dep_stack != ''
+        env:
+          SPACELIFT_API_KEY_ENDPOINT: ${{ vars.SPACELIFT_API_URL }}
+          SPACELIFT_API_KEY_ID: ${{ secrets.SPACELIFT_API_KEY_ID }}
+          SPACELIFT_API_KEY_SECRET: ${{ secrets.SPACELIFT_API_KEY_SECRET }}
+        run: |
+          set -euo pipefail
+          OUTPUTS=$(spacectl stack output list --id "${{ inputs.spacelift_dep_stack }}" --format json)
+          if [[ "${{ inputs.stack_name }}" == "eks" ]]; then
+            {
+              echo "TF_VAR_vpc_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_id") | .value')"
+              echo "TF_VAR_subnet_ids=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="private_subnet_ids") | .value')"
+            } >> "$GITHUB_ENV"
+          elif [[ "${{ inputs.stack_name }}" == "argo-cd" || "${{ inputs.stack_name }}" == "prometheus" ]]; then
+            {
+              echo "TF_VAR_eks_cluster_name=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
+              echo "TF_VAR_eks_cluster_endpoint=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
+              echo "TF_VAR_cluster_ca_certificate=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Init
+        run: tofu -chdir=stacks/${{ inputs.stack_name }} init -backend=false -input=false
+
+      - name: Plan
+        run: |
+          set -euo pipefail
+          tofu -chdir=stacks/${{ inputs.stack_name }} plan \
+            -input=false \
+            -no-color 2>&1 | tee /tmp/${{ inputs.stack_name }}-plan.txt
+
+      - name: Extract plan summary
+        id: extract
+        if: always()
+        run: |
+          set -euo pipefail
+          PLAN_FILE="/tmp/${{ inputs.stack_name }}-plan.txt"
+          if [[ ! -f "$PLAN_FILE" ]]; then
+            echo "plan_summary=Plan did not produce output — see logs." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PLAN_LINE="$(grep '^Plan:' "$PLAN_FILE" | tail -1 || true)"
+          if [[ -z "$PLAN_LINE" ]]; then
+            echo "plan_summary=No changes." >> "$GITHUB_OUTPUT"
+          else
+            echo "plan_summary=${PLAN_LINE}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.6
+        if: always()
+        with:
+          name: opentofu-plan-${{ inputs.stack_name }}
+          path: /tmp/${{ inputs.stack_name }}-plan.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Add job summary
+        if: always()
+        run: |
+          {
+            echo "## OpenTofu plan: ${{ inputs.stack_name }}"
+            echo ""
+            echo "${{ steps.extract.outputs.plan_summary }}"
+            echo ""
+            echo "Full output in artifact: \`opentofu-plan-${{ inputs.stack_name }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

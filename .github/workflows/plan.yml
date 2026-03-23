@@ -1,0 +1,128 @@
+name: opentofu-plan
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/plan.yml"
+      - ".github/workflows/_tofu-plan-stack.yml"
+      - "stacks/**"
+      - "modules/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  plan-network:
+    uses: ./.github/workflows/_tofu-plan-stack.yml
+    with:
+      stack_name: network
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets: inherit
+
+  plan-eks:
+    uses: ./.github/workflows/_tofu-plan-stack.yml
+    with:
+      stack_name: eks
+      aws_region: ${{ vars.AWS_REGION }}
+      spacelift_dep_stack: network
+    secrets: inherit
+
+  plan-argo-cd:
+    uses: ./.github/workflows/_tofu-plan-stack.yml
+    with:
+      stack_name: argo-cd
+      aws_region: ${{ vars.AWS_REGION }}
+      spacelift_dep_stack: eks
+    secrets: inherit
+
+  plan-prometheus:
+    uses: ./.github/workflows/_tofu-plan-stack.yml
+    with:
+      stack_name: prometheus
+      aws_region: ${{ vars.AWS_REGION }}
+      spacelift_dep_stack: eks
+    secrets: inherit
+
+  plan-summary:
+    needs: [plan-network, plan-eks, plan-argo-cd, plan-prometheus]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Build combined summary
+        id: summary
+        env:
+          NETWORK_SUMMARY: ${{ needs.plan-network.outputs.plan_summary }}
+          NETWORK_RESULT: ${{ needs.plan-network.result }}
+          EKS_SUMMARY: ${{ needs.plan-eks.outputs.plan_summary }}
+          EKS_RESULT: ${{ needs.plan-eks.result }}
+          ARGOCD_SUMMARY: ${{ needs.plan-argo-cd.outputs.plan_summary }}
+          ARGOCD_RESULT: ${{ needs.plan-argo-cd.result }}
+          PROMETHEUS_SUMMARY: ${{ needs.plan-prometheus.outputs.plan_summary }}
+          PROMETHEUS_RESULT: ${{ needs.plan-prometheus.result }}
+        run: |
+          set -euo pipefail
+          result_icon() { [[ "$1" == "success" ]] && echo "✅" || echo "❌"; }
+          {
+            echo "body<<COMMENT_EOF"
+            echo "<!-- opentofu-plan-summary -->"
+            echo "## OpenTofu plan summary"
+            echo ""
+            echo "| Stack | Result | Summary |"
+            echo "| --- | --- | --- |"
+            echo "| network | $(result_icon "${NETWORK_RESULT}") ${NETWORK_RESULT} | ${NETWORK_SUMMARY} |"
+            echo "| eks | $(result_icon "${EKS_RESULT}") ${EKS_RESULT} | ${EKS_SUMMARY} |"
+            echo "| argo-cd | $(result_icon "${ARGOCD_RESULT}") ${ARGOCD_RESULT} | ${ARGOCD_SUMMARY} |"
+            echo "| prometheus | $(result_icon "${PROMETHEUS_RESULT}") ${PROMETHEUS_RESULT} | ${PROMETHEUS_SUMMARY} |"
+            echo "COMMENT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Add workflow summary
+        run: echo "${{ steps.summary.outputs.body }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          COMMENT_BODY: ${{ steps.summary.outputs.body }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const marker = '<!-- opentofu-plan-summary -->';
+            const body = process.env.COMMENT_BODY;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Enforce gate
+        if: |
+          needs.plan-network.result != 'success' ||
+          needs.plan-eks.result != 'success' ||
+          needs.plan-argo-cd.result != 'success' ||
+          needs.plan-prometheus.result != 'success'
+        run: |
+          echo "network:    ${{ needs.plan-network.result }}"
+          echo "eks:        ${{ needs.plan-eks.result }}"
+          echo "argo-cd:    ${{ needs.plan-argo-cd.result }}"
+          echo "prometheus: ${{ needs.plan-prometheus.result }}"
+          echo ""
+          echo "OpenTofu plan gate failed — one or more stacks did not succeed."
+          exit 1

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": ["dependencies"],
+  "pre-commit": {
+    "enabled": true
+  },
+  "terraform": {
+    "enabled": true
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "tflint_version input in validate.yml",
+      "fileMatch": ["\\.github/workflows/validate\\.yml"],
+      "matchStrings": ["tflint_version:\\s+(?<currentValue>[^\\s]+)"],
+      "depNameTemplate": "terraform-linters/tflint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "ArgoCD Helm chart version in variables.tf",
+      "fileMatch": ["stacks/argo-cd/variables\\.tf"],
+      "matchStrings": [
+        "default\\s+=\\s+\"(?<currentValue>[^\"]+)\"\\s*\\n}\\s*$"
+      ],
+      "depNameTemplate": "argo-cd",
+      "packageNameTemplate": "argoproj/argo-helm",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^argo-cd-(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "kube-prometheus-stack Helm chart version in variables.tf",
+      "fileMatch": ["stacks/prometheus/variables\\.tf"],
+      "matchStrings": [
+        "prometheus_chart_version[\\s\\S]*?default\\s+=\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "kube-prometheus-stack",
+      "packageNameTemplate": "prometheus-community/helm-charts",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^kube-prometheus-stack-(?<version>.*)$"
+    }
+  ]
+}
