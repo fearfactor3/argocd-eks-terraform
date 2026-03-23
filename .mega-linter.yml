@@ -1,0 +1,30 @@
+# MegaLinter configuration
+# Docs: https://megalinter.io/latest/configuration/
+
+ENABLE_LINTERS:
+  - ACTION_ACTIONLINT
+  - REPOSITORY_CHECKOV
+  - REPOSITORY_GIT_DIFF
+  - REPOSITORY_GITLEAKS
+  - REPOSITORY_TRIVY
+  - YAML_YAMLLINT
+  - JSON_JSONLINT
+  - MARKDOWN_MARKDOWNLINT
+  - SPELL_CSPELL
+
+VALIDATE_ALL_CODEBASE: true
+APPLY_FIXES: none
+FLAVOR_SUGGESTIONS: false
+
+FILTER_REGEX_EXCLUDE: '(megalinter-reports/|\.terraform/)'
+
+# Linter config file locations
+SPELL_CSPELL_CONFIG_FILE: .github/linters/cspell.json
+YAML_YAMLLINT_CONFIG_FILE: .github/linters/.yamllint
+MARKDOWN_MARKDOWNLINT_CONFIG_FILE: .github/linters/.markdownlint.json
+REPOSITORY_CHECKOV_ARGUMENTS: "--framework terraform --config-file .github/linters/.checkov.yaml"
+
+SHOW_ELAPSED_TIME: true
+SARIF_REPORTER: true
+FILEIO_REPORTER: false
+UPDATED_SOURCES_REPORTER: false

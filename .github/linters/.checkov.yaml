@@ -1,0 +1,36 @@
+---
+# Checkov skip list — intentional design decisions
+# Justifications for each skipped check are kept here so decisions are
+# reviewable in code review rather than scattered across .tf files.
+skip-check:
+  # EKS public endpoint is intentionally enabled; access is restricted via the
+  # public_access_cidrs variable — not hardcoded to 0.0.0.0/0.
+  - CKV_AWS_38
+  - CKV_AWS_39
+
+  # Public subnets require map_public_ip_on_launch = true for NAT Gateway EIPs
+  # and internet-facing load balancers. This is expected behaviour for public subnets.
+  - CKV_AWS_130
+
+  # EKS cluster security group unrestricted egress is required for nodes to reach
+  # ECR, S3, and AWS APIs. Restricting egress breaks cluster functionality.
+  - CKV_AWS_382
+
+  # GitHub Actions plan role uses read-only IAM/EC2/EKS actions. CKV_AWS_107
+  # fires on iam:Get*/List* as a potential credentials-exposure vector — false
+  # positive for a plan-only role with no write permissions.
+  - CKV_AWS_107
+
+  # Read-only describe actions (ec2:Describe*, eks:List*, iam:Get*) cannot be
+  # scoped to specific resource ARNs — wildcard resources are required.
+  - CKV_AWS_356
+
+  # KMS root account key policy uses kms:* on * resources. This is the AWS-recommended
+  # pattern for key administrator access and is required to prevent the key from
+  # becoming unmanageable if the attached role is deleted.
+  - CKV_AWS_109
+  - CKV_AWS_111
+
+  # VPC flow logs are not yet implemented. Pending decision on log destination
+  # (CloudWatch, Loki, or Firehose). Will be removed when flow logs are added.
+  - CKV2_AWS_11

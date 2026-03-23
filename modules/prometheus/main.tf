@@ -1,3 +1,17 @@
+terraform {
+  required_version = "~> 1.10"
+  required_providers {
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 3.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 3.0"
+    }
+  }
+}
+
 resource "helm_release" "prometheus" {
   name             = var.release_name
   repository       = var.helm_repo_url
@@ -17,4 +31,3 @@ data "kubernetes_service_v1" "grafana" {
     namespace = helm_release.prometheus.namespace
   }
 }
-

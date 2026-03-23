@@ -1,0 +1,82 @@
+name: opentofu-validate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/validate.yml"
+      - "stacks/**"
+      - "modules/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    name: Format check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@fc711fa910b93cba0f3fbecaafc9f42fd0c411cb # v2.0.0
+        with:
+          tofu_version: "~1.10"
+
+      - name: Check formatting
+        run: tofu fmt -check -recursive .
+
+  validate:
+    name: Validate (${{ matrix.stack }})
+    needs: [fmt]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack:
+          - iam
+          - network
+          - eks
+          - argo-cd
+          - prometheus
+          - spacelift
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@fc711fa910b93cba0f3fbecaafc9f42fd0c411cb # v2.0.0
+        with:
+          tofu_version: "~1.10"
+
+      - name: Init (no backend)
+        run: tofu -chdir=stacks/${{ matrix.stack }} init -backend=false
+
+      - name: Validate
+        run: tofu -chdir=stacks/${{ matrix.stack }} validate
+
+  tflint:
+    name: tflint
+    needs: [fmt]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup tflint
+        uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93 # v6.2.2
+        with:
+          tflint_version: v0.61.0
+
+      - name: Init tflint
+        run: tflint --init --config .github/linters/.tflint.hcl
+
+      - name: Run tflint
+        run: tflint --recursive --config "$(pwd)/.github/linters/.tflint.hcl"

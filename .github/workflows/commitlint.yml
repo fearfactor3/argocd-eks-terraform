@@ -1,0 +1,46 @@
+name: commitlint
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  commitlint:
+    name: PR title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            fix
+            feat
+            docs
+            style
+            refactor
+            test
+            chore
+            ci
+          scopes: |
+            network
+            eks
+            argo-cd
+            prometheus
+            iam
+            spacelift
+            ci
+            deps
+            docs
+            modules
+            stacks
+          requireScope: true
