@@ -185,11 +185,34 @@ Review and merge Renovate PRs regularly. All checks must pass before merging.
 
 The following must be configured before CI/CD workflows are functional.
 
+### Bootstrap: IAM stack
+
+The `stacks/iam` stack is a one-time account-level setup that creates the GitHub Actions
+OIDC provider and a read-only plan role. It runs outside Spacelift and must be applied
+manually before any CI plan workflows can authenticate to AWS.
+
+```sh
+cd stacks/iam
+tofu init
+tofu plan -var="github_org=<your-github-user-or-org>" -var="github_repo=argocd-eks-terraform"
+tofu apply -var="github_org=<your-github-user-or-org>" -var="github_repo=argocd-eks-terraform"
+```
+
+Then set the role ARN as a GitHub secret:
+
+```sh
+gh secret set AWS_ROLE_ARN --body "$(tofu output -raw github_actions_plan_role_arn)"
+```
+
+The role is scoped to `pull_request` events on this repo only and has read-only permissions
+(`ec2:Describe*`, `eks:Describe*/List*`, `iam:Get*/List*`, `sts:GetCallerIdentity`).
+No write access is granted — plan only.
+
 ### Secrets
 
 | Secret | Description |
 | --- | --- |
-| `AWS_ROLE_ARN` | IAM role ARN for GitHub Actions OIDC authentication |
+| `AWS_ROLE_ARN` | IAM role ARN output from `stacks/iam` — see [Bootstrap: IAM stack](#bootstrap-iam-stack) |
 | `SPACELIFT_API_KEY_ID` | Spacelift API key ID for spacectl |
 | `SPACELIFT_API_KEY_SECRET` | Spacelift API key secret for spacectl |
 
