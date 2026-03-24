@@ -26,12 +26,14 @@ Two autoscaling solutions are available for EKS:
 Deploy CA via the `cluster-autoscaler` Helm chart. CA watches `kube-system` events and calls the Auto Scaling Group API to adjust the managed node group's desired count.
 
 **Pros:**
+
 - Mature, well-documented, widely deployed
 - Works directly with the existing `aws_eks_node_group` (ASG-backed)
 - Simple IRSA setup: one IAM role with `autoscaling:*` and `ec2:Describe*`
 - Understood failure modes
 
 **Cons:**
+
 - Slower to scale down (default 10-minute underutilization window before a node is removed)
 - Does not select instance types — still bound to the instance types in the node group
 - Bin-packing is less efficient than Karpenter
@@ -41,12 +43,14 @@ Deploy CA via the `cluster-autoscaler` Helm chart. CA watches `kube-system` even
 Deploy Karpenter and replace the managed node group with `NodePool` and `EC2NodeClass` resources. Karpenter provisions EC2 instances directly from the instance metadata API.
 
 **Pros:**
+
 - Significantly faster scale-up (seconds vs. minutes)
 - Selects the cheapest available instance type that satisfies pod requirements
 - Native Spot + On-Demand mixed provisioning with automatic fallback
 - Consolidation: actively bin-packs and terminates underutilized nodes
 
 **Cons:**
+
 - Replaces the managed node group — requires a node group migration
 - More complex initial setup (IRSA, NodePool, EC2NodeClass resources)
 - Newer project; more frequent API changes across versions
@@ -57,11 +61,13 @@ Deploy Karpenter and replace the managed node group with `NodePool` and `EC2Node
 No autoscaler. Nodes run at `desired_size` continuously.
 
 **Pros:**
+
 - Zero operational complexity
 - Predictable costs
 - Appropriate for initial bootstrap and early development
 
 **Cons:**
+
 - Full cost even when cluster is idle (nights, weekends)
 - Cannot handle traffic spikes automatically
 
@@ -82,10 +88,12 @@ No autoscaler. Nodes run at `desired_size` continuously.
 When implementing CA:
 
 1. Tag the managed node group ASG:
-   ```
+
+   ```text
    k8s.io/cluster-autoscaler/enabled = "true"
    k8s.io/cluster-autoscaler/<cluster-name> = "owned"
    ```
+
    These tags can be added to the `aws_eks_node_group` resource via `tags`.
 
 2. Add an IRSA role in `modules/eks/main.tf` scoped to `system:serviceaccount:kube-system:cluster-autoscaler`.

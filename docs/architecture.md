@@ -17,11 +17,11 @@ The design follows three principles:
 ```text
 iam  (shared, deployed once per AWS account)
 
-network-dev ──► eks-dev ──► argo-cd-dev
-                         └─► prometheus-dev
+network-dev ──► eks-dev ──► eks-addons-dev ──► argo-cd-dev
+                                            └─► prometheus-dev
 
-network-prod ──► eks-prod ──► argo-cd-prod
-                           └─► prometheus-prod
+network-prod ──► eks-prod ──► eks-addons-prod ──► argo-cd-prod
+                                              └─► prometheus-prod
 
 spacelift  (meta-stack — manages all stacks above as code)
 ```
@@ -46,7 +46,7 @@ Provisions the foundational layer that every other stack depends on.
 | Resource | Purpose |
 | --- | --- |
 | VPC | Isolated network boundary. DNS hostnames and DNS support are enabled — required for EKS node discovery and VPC-CNI. |
-| Public subnets | Host NAT Gateway EIPs and internet-facing NLBs. Tagged `kubernetes.io/role/elb` for ELB controller discovery. |
+| Public subnets | Host NAT Gateway EIPs and internet-facing ALB. Tagged `kubernetes.io/role/elb` for ALB controller discovery. |
 | Private subnets | Host EKS nodes. No public IPs. Tagged `kubernetes.io/role/internal-elb`. |
 | Internet Gateway | Provides public subnets with a route to the internet. |
 | NAT Gateway | Provides private subnets with outbound internet access (single instance — see [ADR-003](decisions/003-single-nat-gateway.md)). |
@@ -65,9 +65,19 @@ Provisions the foundational layer that every other stack depends on.
 | EBS CSI driver | Managed add-on with a dedicated IRSA role scoped to the `ebs-csi-controller-sa` service account in `kube-system`. See [ADR-004](decisions/004-irsa-over-node-role.md). |
 | Security group | Attached to the control plane. Restricts HTTPS (443) ingress to the VPC CIDR only. |
 
+### EKS Addons stack (per environment)
+
+Deploys cluster-level add-ons that must be running before application stacks can create `Ingress` resources.
+
+| Release | Purpose |
+| --- | --- |
+| `aws-load-balancer-controller` | Watches `Ingress` resources and provisions ALBs on AWS. Runs with an IRSA role scoped to `aws-load-balancer-controller` in `kube-system`. |
+
+This stack also re-exports the EKS cluster credentials (`eks_cluster_name`, `eks_cluster_endpoint`, `cluster_ca_certificate`) as outputs so downstream stacks receive them via the `eks-addons` dependency rather than directly from `eks`.
+
 ### Argo CD stack (per environment)
 
-Deploys Argo CD via Helm into the `argocd` namespace. Exposed externally via an AWS NLB.
+Deploys Argo CD via Helm into the `argocd` namespace. Exposed externally via ALB Ingress at `argocd.<environment>.internal`.
 
 Argo CD is the GitOps engine — it watches a Git repository and continuously reconciles the cluster state to match what is declared there. Application deployments should go through Argo CD rather than direct `kubectl apply`.
 
@@ -77,7 +87,7 @@ Deploys three Helm releases into the `prometheus` namespace:
 
 | Release | Chart | Purpose |
 | --- | --- | --- |
-| `prometheus` | kube-prometheus-stack | Prometheus, Alertmanager, and Grafana. Grafana is exposed via NLB. |
+| `prometheus` | kube-prometheus-stack | Prometheus, Alertmanager, and Grafana. Grafana is exposed via ALB Ingress at `grafana.<environment>.internal`. |
 | `loki` | grafana/loki | Log aggregation backend in SingleBinary mode. |
 | `alloy` | grafana/alloy | Collects VPC flow logs from CloudWatch and ships them to Loki. |
 
@@ -114,7 +124,7 @@ Loki  (http://loki:3100)
   │
   │  Loki datasource
   ▼
-Grafana  (NLB endpoint)
+Grafana  (ALB Ingress)
 ```
 
 **Credentials**: Alloy runs on EKS nodes and inherits AWS credentials from the EC2 instance metadata service (IMDSv2). The node IAM role has `logs:DescribeLogGroups`, `logs:DescribeLogStreams`, `logs:GetLogEvents`, and `logs:FilterLogEvents` permissions. No Kubernetes secrets or IRSA are needed.
@@ -254,6 +264,7 @@ Significant design choices are documented as ADRs in [`docs/decisions/`](decisio
 - [ADR-002: Loki over CloudWatch Insights](decisions/002-loki-over-cloudwatch-insights.md)
 - [ADR-003: Single NAT Gateway](decisions/003-single-nat-gateway.md)
 - [ADR-004: IRSA over node role for EBS CSI](decisions/004-irsa-over-node-role.md)
+- [ADR-005: ALB Ingress Controller over NLB per service](decisions/005-nlb-per-service-vs-alb-ingress.md)
 
 ### Open — Decision Pending
 
@@ -261,7 +272,6 @@ These decisions must be made before production go-live. Until they are resolved,
 
 | ADR | Topic | Blocks |
 | --- | --- | --- |
-| [ADR-005](decisions/005-nlb-per-service-vs-alb-ingress.md) | NLB per service vs. ALB Ingress Controller | Cost reduction, TLS consolidation |
 | [ADR-006](decisions/006-argocd-app-repo.md) | ArgoCD application repository strategy | ArgoCD is deployed but watches nothing |
 | [ADR-007](decisions/007-cluster-autoscaler-vs-karpenter.md) | Cluster Autoscaler vs. Karpenter vs. fixed sizing | Idle node costs |
 | [ADR-008](decisions/008-secrets-management.md) | Secrets management for application workloads | Application workloads cannot receive secrets |

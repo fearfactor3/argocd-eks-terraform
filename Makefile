@@ -2,7 +2,7 @@
 
 STACKS := network eks eks-addons argo-cd prometheus
 
-.PHONY: help init validate fmt fmt-check tflint check-policies lint plan-network plan-eks plan-argo-cd plan-prometheus test-policies test-modules clean
+.PHONY: help init validate fmt fmt-check tflint check-policies markdownlint lint plan-network plan-eks plan-eks-addons plan-argo-cd plan-prometheus test-policies test-modules clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -30,10 +30,13 @@ tflint: ## Run tflint against all stacks (requires tflint --init first)
 	tflint --recursive --config "$(CURDIR)/.github/linters/.tflint.hcl"
 
 check-policies: ## Format-check and unit-test all Spacelift Rego policies
-	opa fmt --check stacks/spacelift/policies/*.rego
+	opa fmt --fail stacks/spacelift/policies/*.rego
 	$(MAKE) --no-print-directory test-policies
 
-lint: fmt-check tflint check-policies ## Run all static checks locally (mirrors CI — no tofu init required)
+markdownlint: ## Lint all Markdown files using .github/linters/.markdownlint.json
+	markdownlint --config .github/linters/.markdownlint.json "**/*.md"
+
+lint: fmt-check tflint check-policies markdownlint ## Run all static checks locally (mirrors CI — no tofu init required)
 
 plan-network: ## Plan the network stack
 	tofu -chdir=stacks/network plan

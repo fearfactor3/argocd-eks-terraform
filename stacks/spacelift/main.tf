@@ -245,7 +245,7 @@ resource "spacelift_policy_attachment" "dev_plan" {
 
 # Production plan policy — blocks destruction of protected resources.
 # Destruction can only proceed when a run is triggered with the emergency override
-# metadata flag. See docs/operating-guide.md for the full procedure.
+# metadata flag. See docs/runbooks/emergency-destroy.md for the full procedure.
 resource "spacelift_policy" "prod_plan" {
   name = "prod-plan"
   type = "PLAN"

@@ -35,7 +35,7 @@ The EBS CSI driver runs as a privileged controller in `kube-system` and needs br
 
 IRSA scopes the permissions to a single service account (`ebs-csi-controller-sa` in `kube-system`) via an IAM condition:
 
-```
+```yaml
 StringEquals:
   <oidc-issuer>:sub: system:serviceaccount:kube-system:ebs-csi-controller-sa
 ```

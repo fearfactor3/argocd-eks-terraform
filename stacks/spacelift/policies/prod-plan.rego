@@ -23,7 +23,7 @@ is_destructive(change) if {
 
 # Emergency override — active only when the run is triggered with:
 #   spacectl stack run trigger --id <stack> --metadata '{"allow_destruction": "true"}'
-# This is a last-resort escape hatch. See docs/operating-guide.md for the full procedure.
+# This is a last-resort escape hatch. See docs/runbooks/emergency-destroy.md for the full procedure.
 destruction_allowed if {
 	input.spacelift.run.user_provided_metadata.allow_destruction == "true"
 }

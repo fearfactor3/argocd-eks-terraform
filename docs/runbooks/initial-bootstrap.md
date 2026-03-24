@@ -15,7 +15,7 @@ First-time deployment of all stacks from zero AWS resources to a fully running d
 
 **Dependency order:**
 
-```
+```text
 IAM (manual, once per AWS account)
   └─► Spacelift bootstrap (manual, UI)
         └─► network-dev → eks-dev → argo-cd-dev + prometheus-dev
@@ -88,6 +88,7 @@ gh secret set AWS_ROLE_ARN --body "$(tofu output -raw github_actions_plan_role_a
 ```
 
 **Validation:**
+
 ```bash
 aws iam get-role --role-name github-actions-plan
 # Expect: role returned with AssumeRolePolicyDocument referencing token.actions.githubusercontent.com
@@ -127,8 +128,9 @@ In the Spacelift UI, confirm all stacks are created and show `Inactive` (ready t
 |-------|-----------|------------------|
 | `network-dev` | — | ~3 min |
 | `eks-dev` | `network-dev` finished | ~15–20 min |
-| `argo-cd-dev` | `eks-dev` finished | ~5 min |
-| `prometheus-dev` | `eks-dev` finished | ~5 min |
+| `eks-addons-dev` | `eks-dev` finished | ~3 min |
+| `argo-cd-dev` | `eks-addons-dev` finished | ~5 min |
+| `prometheus-dev` | `eks-addons-dev` finished | ~5 min |
 
 Monitor progress in the Spacelift UI. Each stack should reach `Finished` state.
 
@@ -147,15 +149,19 @@ aws eks update-kubeconfig \
 
 # Verify nodes are Ready and in private subnets
 kubectl get nodes -o wide
-# Expect: 2 nodes, STATUS=Ready, EXTERNAL-IP=<none>
+# Expect: 1 node (dev), STATUS=Ready, EXTERNAL-IP=<none>
+
+# Verify ALB controller is running
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+# Expect: 1 pod Running
 
 # Verify ArgoCD pods
 kubectl get pods -n argocd
 # Expect: all pods Running
 
-# Verify ArgoCD NLB assigned
-kubectl get svc -n argocd argocd-server
-# Expect: EXTERNAL-IP populated (NLB hostname)
+# Verify ArgoCD ALB Ingress provisioned
+kubectl get ingress -n argocd
+# Expect: ADDRESS populated (ALB DNS hostname)
 
 # Verify Prometheus stack
 kubectl get pods -n prometheus
@@ -182,7 +188,8 @@ Prod stacks do not autodeploy. Each requires a manual approval in the Spacelift 
 2. Review the plan output carefully. Click **Approve**.
 3. After `network-prod` finishes, `eks-prod` will queue automatically.
 4. Approve `eks-prod` after reviewing the plan (~20 min to apply).
-5. Approve `argo-cd-prod` and `prometheus-prod` after `eks-prod` finishes.
+5. Approve `eks-addons-prod` after `eks-prod` finishes (~3 min).
+6. Approve `argo-cd-prod` and `prometheus-prod` after `eks-addons-prod` finishes.
 
 **Validation:** Repeat the Phase 4 checks against the prod cluster name.
 
@@ -194,8 +201,9 @@ Prod stacks do not autodeploy. Each requires a manual approval in the Spacelift 
 |-----------|--------|---------------|
 | 0–3 min | `network-dev` stack `Finished` | Spacelift UI |
 | 3–25 min | `eks-dev` stack `Finished`, nodes `Ready` | Spacelift UI + `kubectl get nodes` |
-| 25–30 min | ArgoCD UI reachable on NLB hostname | Browser |
-| 30–35 min | Grafana UI reachable, Prometheus targets up | Browser |
+| 25–28 min | `eks-addons-dev` stack `Finished`, ALB controller pod `Running` | Spacelift UI + `kubectl get pods -n kube-system` |
+| 28–33 min | ArgoCD UI reachable via ALB Ingress hostname | Browser |
+| 33–38 min | Grafana UI reachable, Prometheus targets up | Browser |
 | 35–45 min | Loki receiving VPC flow log data from Alloy | Grafana → Explore |
 
 ---
@@ -238,11 +246,13 @@ cd stacks/network    && tofu destroy
 **Symptom:** `eks-dev` stack fails after 15+ minutes with a control plane error.
 
 **Cause:** Usually one of:
+
 1. IAM role propagation delay — EKS rejects the cluster role within the first ~15 seconds of creation
 2. Subnet tag missing — VPC-CNI cannot discover the correct subnets
 3. KMS key policy not yet propagated
 
 **Response:**
+
 1. Do **not** re-trigger immediately — the cluster may be in a partial state
 2. Check AWS Console → EKS → Clusters for the cluster status and error message
 3. If status is `FAILED`, run `tofu destroy` on the eks stack to clean it up
@@ -260,14 +270,12 @@ cd stacks/network    && tofu destroy
 - [ ] Confirm Grafana datasources are working (Prometheus and Loki)
 - [ ] Confirm Alloy is delivering flow logs to Loki
 - [ ] Add AWS Budget alert for dev environment (prevents surprise bills)
-- [ ] Tag NLBs with `Project` and `ManagedBy` tags (currently missing from load balancer resources)
 
 ### Short-term (within 1 week)
 
 - [ ] Resolve ADR-006 — connect ArgoCD to an application repository
 - [ ] Resolve ADR-009 — add TLS to ArgoCD and Grafana endpoints before sharing URLs externally
 - [ ] Deploy Cluster Autoscaler (ADR-007) to reduce idle node costs
-- [ ] Evaluate ALB Ingress Controller to consolidate NLBs (ADR-005)
 
 ### Before Production Go-Live
 

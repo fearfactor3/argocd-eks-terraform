@@ -1,7 +1,7 @@
 {
   "version": "0.2",
   "language": "en",
-  "dictionaries": ["en_US", "softwareTerms", "bash"],
+  "dictionaries": ["en_US", "en-gb", "softwareTerms", "bash", "aws", "k8s", "terraform"],
   "ignorePaths": [
     ".terraform/",
     ".terraform.lock.hcl",
@@ -100,7 +100,24 @@
     "datasource",
     "datasources",
     "singleBinary",
-    "replication"
+    "replication",
+    "setproduct",
+    "EBSCSI",
+    "misconfig",
+    "Karpenter",
+    "Kubeconform",
+    "kubeseal",
+    "IMDS",
+    "Coip",
+    "rtype",
+    "ingester",
+    "visualised",
+    "visualise",
+    "materialises",
+    "centralised",
+    "behaviours",
+    "underutilization",
+    "misconfigs"
   ],
   "ignoreWords": [],
   "overrides": [

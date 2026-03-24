@@ -24,11 +24,13 @@ Two structural approaches exist for managing the manifests ArgoCD will reconcile
 Add an `apps/` directory to this repository. ArgoCD's `Application` resources (or an `ApplicationSet`) point at paths within `argocd-eks-terraform`.
 
 **Pros:**
+
 - Single repository for infrastructure and application state — one PR covers both
 - Spacelift already manages this repo; no second repo to bootstrap
 - Simpler to get started
 
 **Cons:**
+
 - Infrastructure changes and application changes are coupled in the same branch protection and CI pipeline
 - PR blast radius grows: a broken app manifest can block an infra merge
 - As the number of applications grows, the repo becomes harder to navigate
@@ -39,12 +41,14 @@ Add an `apps/` directory to this repository. ArgoCD's `Application` resources (o
 Create a dedicated repository (e.g. `argocd-apps`) that contains only Kubernetes manifests, Helm values, and Kustomize overlays. This repo is watched by ArgoCD in each environment.
 
 **Pros:**
+
 - Clear separation of concerns — infra engineers and application teams work in different repos
 - Application deploys do not require infra repo access
 - Standard GitOps pattern; well-supported by ArgoCD's `ApplicationSet` with `git` generator
 - App repo can have its own, lighter-weight CI (manifest linting, Kubeconform validation)
 
 **Cons:**
+
 - Two repositories to maintain and bootstrap
 - Cross-cutting changes (e.g. new namespace + new application) require coordinated PRs across both repos
 - Slightly more complex initial setup
