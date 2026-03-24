@@ -3,6 +3,40 @@
 
 mock_provider "aws" {}
 
+# aws_iam_policy_document returns a mock string under mock_provider, which fails
+# the IAM JSON validation on aws_iam_role.assume_role_policy. Override both
+# policy documents with minimal valid JSON so the plan can proceed.
+override_data {
+  target = data.aws_iam_policy_document.vpc_flow_logs_assume
+  values = {
+    json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"vpc-flow-logs.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+  }
+}
+
+override_data {
+  target = data.aws_iam_policy_document.vpc_flow_logs
+  values = {
+    json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"logs:CreateLogStream\",\"logs:PutLogEvents\",\"logs:DescribeLogGroups\",\"logs:DescribeLogStreams\"],\"Resource\":\"*\"}]}"
+  }
+}
+
+# Mock provider generates non-ARN strings for computed attributes; aws_flow_log
+# validates that iam_role_arn and log_destination are valid ARNs. Override both
+# upstream resources so the mock values pass format validation.
+override_resource {
+  target = aws_iam_role.vpc_flow_logs
+  values = {
+    arn = "arn:aws:iam::123456789012:role/test-cluster-vpc-flow-logs"
+  }
+}
+
+override_resource {
+  target = aws_cloudwatch_log_group.vpc_flow_logs
+  values = {
+    arn = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/vpc-flow-logs/test-cluster"
+  }
+}
+
 variables {
   vpc_cidr        = "10.0.0.0/16"
   public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]

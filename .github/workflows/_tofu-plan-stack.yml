@@ -73,6 +73,35 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ inputs.aws_region || 'us-east-1' }}
 
+      # Inject per-environment config variables as TF_VAR_* so no tfvars files are
+      # needed in each stack directory. Values mirror the defaults in
+      # stacks/spacelift/variables.tf. OpenTofu silently ignores any TF_VAR_*
+      # that do not match a declared variable in the target stack.
+      - name: Inject per-environment variables
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.environment }}" == "dev" ]]; then
+            {
+              echo "TF_VAR_environment=dev"
+              echo "TF_VAR_cluster_name=argocd-dev"
+              echo "TF_VAR_vpc_cidr=10.0.0.0/16"
+              echo 'TF_VAR_public_subnets=["10.0.1.0/24","10.0.2.0/24"]'
+              echo 'TF_VAR_private_subnets=["10.0.3.0/24","10.0.4.0/24"]'
+              echo "TF_VAR_vpc_cidr_block=10.0.0.0/16"
+              echo 'TF_VAR_public_access_cidrs=["0.0.0.0/0"]'
+            } >> "$GITHUB_ENV"
+          elif [[ "${{ inputs.environment }}" == "prod" ]]; then
+            {
+              echo "TF_VAR_environment=prod"
+              echo "TF_VAR_cluster_name=argocd-prod"
+              echo "TF_VAR_vpc_cidr=10.1.0.0/16"
+              echo 'TF_VAR_public_subnets=["10.1.1.0/24","10.1.2.0/24"]'
+              echo 'TF_VAR_private_subnets=["10.1.3.0/24","10.1.4.0/24"]'
+              echo "TF_VAR_vpc_cidr_block=10.1.0.0/16"
+              echo 'TF_VAR_public_access_cidrs=["0.0.0.0/0"]'
+            } >> "$GITHUB_ENV"
+          fi
+
       - name: Setup spacectl
         if: inputs.spacelift_dep_stack != ''
         uses: spacelift-io/setup-spacectl@d0e2c81467c31a68af60db5b1f9f1f54f79cab96 # v2.0.0
@@ -99,6 +128,13 @@ jobs:
               echo "TF_VAR_vpc_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_id") | .value')"
               echo "TF_VAR_subnet_ids=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="private_subnet_ids") | .value')"
               echo "TF_VAR_vpc_cidr_block=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_cidr_block") | .value')"
+            } >> "$GITHUB_ENV"
+          elif [[ "${{ inputs.stack_name }}" == "eks-addons" ]]; then
+            {
+              echo "TF_VAR_eks_cluster_name=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
+              echo "TF_VAR_eks_cluster_endpoint=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
+              echo "TF_VAR_cluster_ca_certificate=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
+              echo "TF_VAR_aws_lb_controller_role_arn=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="aws_lb_controller_role_arn") | .value')"
             } >> "$GITHUB_ENV"
           elif [[ "${{ inputs.stack_name }}" == "argo-cd" || "${{ inputs.stack_name }}" == "prometheus" ]]; then
             {

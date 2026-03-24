@@ -57,6 +57,7 @@ jobs:
           - iam
           - network
           - eks
+          - eks-addons
           - argo-cd
           - prometheus
           - spacelift
