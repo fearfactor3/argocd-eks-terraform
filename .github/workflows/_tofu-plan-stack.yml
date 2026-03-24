@@ -122,7 +122,10 @@ jobs:
             echo "Spacelift API keys not configured — skipping cross-stack output fetch. Plan may be incomplete."
             exit 0
           fi
-          OUTPUTS=$(spacectl stack outputs --id "${{ inputs.spacelift_dep_stack }}" --output json)
+          OUTPUTS=$(spacectl stack outputs --id "${{ inputs.spacelift_dep_stack }}" --output json 2>&1) || {
+            echo "Stack '${{ inputs.spacelift_dep_stack }}' not found in Spacelift — cross-stack outputs unavailable. Plan will use stub values."
+            exit 0
+          }
           if [[ "${{ inputs.stack_name }}" == "eks" ]]; then
             {
               echo "TF_VAR_vpc_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_id") | .value')"
