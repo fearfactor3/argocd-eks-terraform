@@ -1,0 +1,5 @@
+rules:
+  idiomatic:
+    # Spacelift requires `package spacelift` regardless of directory location.
+    directory-package-mismatch:
+      level: ignore

@@ -12,7 +12,3 @@ AVD-AWS-0104
 # Public subnets require map_public_ip_on_launch = true for NAT Gateway EIPs
 # and internet-facing load balancers. This is expected behaviour for public subnets.
 AVD-AWS-0164
-
-# VPC flow logs are not yet implemented. Pending decision on log destination
-# (CloudWatch, Loki, or Firehose). Will be removed when flow logs are added.
-AVD-AWS-0178

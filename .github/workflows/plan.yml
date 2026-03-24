@@ -20,40 +20,97 @@ concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
+# Explicit dev/prod jobs (no matrix) so the PR comment can show per-environment
+# results. A matrix strategy aggregates all legs into a single result, making
+# it impossible to distinguish which environment failed.
+
 jobs:
-  plan-network:
+  plan-network-dev:
     uses: ./.github/workflows/_tofu-plan-stack.yml
     with:
       stack_name: network
+      environment: dev
       aws_region: ${{ vars.AWS_REGION }}
     secrets: inherit
 
-  plan-eks:
+  plan-network-prod:
+    uses: ./.github/workflows/_tofu-plan-stack.yml
+    with:
+      stack_name: network
+      environment: prod
+      aws_region: ${{ vars.AWS_REGION }}
+    secrets: inherit
+
+  plan-eks-dev:
+    needs: plan-network-dev
     uses: ./.github/workflows/_tofu-plan-stack.yml
     with:
       stack_name: eks
+      environment: dev
       aws_region: ${{ vars.AWS_REGION }}
-      spacelift_dep_stack: network
+      spacelift_dep_stack: network-dev
     secrets: inherit
 
-  plan-argo-cd:
+  plan-eks-prod:
+    needs: plan-network-prod
+    uses: ./.github/workflows/_tofu-plan-stack.yml
+    with:
+      stack_name: eks
+      environment: prod
+      aws_region: ${{ vars.AWS_REGION }}
+      spacelift_dep_stack: network-prod
+    secrets: inherit
+
+  plan-argo-cd-dev:
+    needs: plan-eks-dev
     uses: ./.github/workflows/_tofu-plan-stack.yml
     with:
       stack_name: argo-cd
+      environment: dev
       aws_region: ${{ vars.AWS_REGION }}
-      spacelift_dep_stack: eks
+      spacelift_dep_stack: eks-dev
     secrets: inherit
 
-  plan-prometheus:
+  plan-argo-cd-prod:
+    needs: plan-eks-prod
+    uses: ./.github/workflows/_tofu-plan-stack.yml
+    with:
+      stack_name: argo-cd
+      environment: prod
+      aws_region: ${{ vars.AWS_REGION }}
+      spacelift_dep_stack: eks-prod
+    secrets: inherit
+
+  plan-prometheus-dev:
+    needs: plan-eks-dev
     uses: ./.github/workflows/_tofu-plan-stack.yml
     with:
       stack_name: prometheus
+      environment: dev
       aws_region: ${{ vars.AWS_REGION }}
-      spacelift_dep_stack: eks
+      spacelift_dep_stack: eks-dev
+    secrets: inherit
+
+  plan-prometheus-prod:
+    needs: plan-eks-prod
+    uses: ./.github/workflows/_tofu-plan-stack.yml
+    with:
+      stack_name: prometheus
+      environment: prod
+      aws_region: ${{ vars.AWS_REGION }}
+      spacelift_dep_stack: eks-prod
     secrets: inherit
 
   plan-summary:
-    needs: [plan-network, plan-eks, plan-argo-cd, plan-prometheus]
+    needs:
+      - plan-network-dev
+      - plan-network-prod
+      - plan-eks-dev
+      - plan-eks-prod
+      - plan-argo-cd-dev
+      - plan-argo-cd-prod
+      - plan-prometheus-dev
+      - plan-prometheus-prod
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -62,14 +119,14 @@ jobs:
       - name: Build combined summary
         id: summary
         env:
-          NETWORK_SUMMARY: ${{ needs.plan-network.outputs.plan_summary }}
-          NETWORK_RESULT: ${{ needs.plan-network.result }}
-          EKS_SUMMARY: ${{ needs.plan-eks.outputs.plan_summary }}
-          EKS_RESULT: ${{ needs.plan-eks.result }}
-          ARGOCD_SUMMARY: ${{ needs.plan-argo-cd.outputs.plan_summary }}
-          ARGOCD_RESULT: ${{ needs.plan-argo-cd.result }}
-          PROMETHEUS_SUMMARY: ${{ needs.plan-prometheus.outputs.plan_summary }}
-          PROMETHEUS_RESULT: ${{ needs.plan-prometheus.result }}
+          NETWORK_DEV:     ${{ needs.plan-network-dev.result }}
+          NETWORK_PROD:    ${{ needs.plan-network-prod.result }}
+          EKS_DEV:         ${{ needs.plan-eks-dev.result }}
+          EKS_PROD:        ${{ needs.plan-eks-prod.result }}
+          ARGOCD_DEV:      ${{ needs.plan-argo-cd-dev.result }}
+          ARGOCD_PROD:     ${{ needs.plan-argo-cd-prod.result }}
+          PROMETHEUS_DEV:  ${{ needs.plan-prometheus-dev.result }}
+          PROMETHEUS_PROD: ${{ needs.plan-prometheus-prod.result }}
         run: |
           set -euo pipefail
           result_icon() { [[ "$1" == "success" ]] && echo "✅" || echo "❌"; }
@@ -78,12 +135,12 @@ jobs:
             echo "<!-- opentofu-plan-summary -->"
             echo "## OpenTofu plan summary"
             echo ""
-            echo "| Stack | Result | Summary |"
+            echo "| Stack | dev | prod |"
             echo "| --- | --- | --- |"
-            echo "| network | $(result_icon "${NETWORK_RESULT}") ${NETWORK_RESULT} | ${NETWORK_SUMMARY} |"
-            echo "| eks | $(result_icon "${EKS_RESULT}") ${EKS_RESULT} | ${EKS_SUMMARY} |"
-            echo "| argo-cd | $(result_icon "${ARGOCD_RESULT}") ${ARGOCD_RESULT} | ${ARGOCD_SUMMARY} |"
-            echo "| prometheus | $(result_icon "${PROMETHEUS_RESULT}") ${PROMETHEUS_RESULT} | ${PROMETHEUS_SUMMARY} |"
+            echo "| network    | $(result_icon "${NETWORK_DEV}") ${NETWORK_DEV}       | $(result_icon "${NETWORK_PROD}") ${NETWORK_PROD}       |"
+            echo "| eks        | $(result_icon "${EKS_DEV}") ${EKS_DEV}               | $(result_icon "${EKS_PROD}") ${EKS_PROD}               |"
+            echo "| argo-cd    | $(result_icon "${ARGOCD_DEV}") ${ARGOCD_DEV}         | $(result_icon "${ARGOCD_PROD}") ${ARGOCD_PROD}         |"
+            echo "| prometheus | $(result_icon "${PROMETHEUS_DEV}") ${PROMETHEUS_DEV} | $(result_icon "${PROMETHEUS_PROD}") ${PROMETHEUS_PROD} |"
             echo "COMMENT_EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -114,15 +171,23 @@ jobs:
 
       - name: Enforce gate
         if: |
-          needs.plan-network.result != 'success' ||
-          needs.plan-eks.result != 'success' ||
-          needs.plan-argo-cd.result != 'success' ||
-          needs.plan-prometheus.result != 'success'
+          needs.plan-network-dev.result    != 'success' ||
+          needs.plan-network-prod.result   != 'success' ||
+          needs.plan-eks-dev.result        != 'success' ||
+          needs.plan-eks-prod.result       != 'success' ||
+          needs.plan-argo-cd-dev.result    != 'success' ||
+          needs.plan-argo-cd-prod.result   != 'success' ||
+          needs.plan-prometheus-dev.result != 'success' ||
+          needs.plan-prometheus-prod.result != 'success'
         run: |
-          echo "network:    ${{ needs.plan-network.result }}"
-          echo "eks:        ${{ needs.plan-eks.result }}"
-          echo "argo-cd:    ${{ needs.plan-argo-cd.result }}"
-          echo "prometheus: ${{ needs.plan-prometheus.result }}"
+          echo "network    dev:  ${{ needs.plan-network-dev.result }}"
+          echo "network    prod: ${{ needs.plan-network-prod.result }}"
+          echo "eks        dev:  ${{ needs.plan-eks-dev.result }}"
+          echo "eks        prod: ${{ needs.plan-eks-prod.result }}"
+          echo "argo-cd    dev:  ${{ needs.plan-argo-cd-dev.result }}"
+          echo "argo-cd    prod: ${{ needs.plan-argo-cd-prod.result }}"
+          echo "prometheus dev:  ${{ needs.plan-prometheus-dev.result }}"
+          echo "prometheus prod: ${{ needs.plan-prometheus-prod.result }}"
           echo ""
           echo "OpenTofu plan gate failed — one or more stacks did not succeed."
           exit 1

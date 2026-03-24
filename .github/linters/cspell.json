@@ -89,7 +89,18 @@
     "aquasecurity",
     "beatlabs",
     "sarif",
-    "SARIF"
+    "SARIF",
+    "rego",
+    "OPA",
+    "sprintf",
+    "loki",
+    "alloy",
+    "promtail",
+    "cloudwatch",
+    "datasource",
+    "datasources",
+    "singleBinary",
+    "replication"
   ],
   "ignoreWords": [],
   "overrides": [
@@ -99,6 +110,12 @@
         "arn:aws:[\\w:/-]+",
         "[a-z]+\\.[a-z_]+\\.[a-z_]+",
         "[0-9a-f]{40}"
+      ]
+    },
+    {
+      "filename": "**/*.rego",
+      "ignoreRegExpList": [
+        "[a-z_]+\\.[a-z_]+"
       ]
     }
   ]

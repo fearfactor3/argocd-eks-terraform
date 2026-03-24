@@ -17,6 +17,27 @@ repos:
         args: [--branch, main]
       - id: trailing-whitespace
 
+  - repo: local
+    hooks:
+      - id: opa-fmt
+        name: opa fmt
+        language: system
+        entry: opa fmt -w
+        files: \.rego$
+
+      - id: tofu-validate
+        name: tofu validate
+        language: system
+        entry: bash -c 'rc=0; for d in stacks/*/; do
+            if [ ! -d "${d}.terraform" ]; then
+              echo "  skip ${d%/} (run make init first)";
+            else
+              tofu -chdir="$d" validate || rc=1;
+            fi;
+          done; exit $rc'
+        pass_filenames: false
+        files: \.tf$
+
   - repo: https://github.com/antonbabenko/pre-commit-terraform
     rev: d0e12caebb2ab0ee8bf98181c8bfe9702bca103d # v1.105.0
     hooks:

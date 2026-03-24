@@ -3,6 +3,10 @@ name: megalinter
 on:
   pull_request:
     branches: [main]
+  # Weekly full-codebase scan — catches new CVEs and misconfigs in unchanged
+  # files that would otherwise never trigger a PR-based scan.
+  schedule:
+    - cron: '0 7 * * 1' # every Monday at 07:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -29,9 +33,14 @@ jobs:
         uses: oxsecurity/megalinter/flavors/terraform@8fbdead70d1409964ab3d5afa885e18ee85388bb # v9.4.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # On PRs scan only changed files (fast). On scheduled runs and
+          # manual dispatches scan everything so new CVEs in untouched files
+          # are not missed — workflow_dispatch is the on-demand equivalent of
+          # the weekly scheduled full scan.
+          VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
 
       - name: Upload SARIF report
-        uses: github/codeql-action/upload-sarif@ebcb5b36ded6beda4ceefea6a8bc4cc885255bb3 # v3.34.1
+        uses: github/codeql-action/upload-sarif@cb06a0a8527b2c6970741b3a0baa15231dc74a4c # v4.34.1
         if: always()
         with:
           sarif_file: megalinter-reports/sarif
