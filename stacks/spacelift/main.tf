@@ -22,7 +22,9 @@ data "aws_caller_identity" "current" {}
 
 # Cross-account role that Spacelift assumes when running any attached stack.
 # The role_arn is constructed from the caller identity so OpenTofu can resolve
-# it without a dependency cycle (integration → external_id → role → role_arn).
+# it without a dependency cycle. The trust policy trusts Spacelift's AWS account
+# (324880187172) without an ExternalId condition — the provider does not reliably
+# populate external_id and the account-scoped principal is sufficient for this setup.
 resource "spacelift_aws_integration" "this" {
   name     = "spacelift"
   role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/spacelift-integration"
@@ -38,9 +40,6 @@ resource "aws_iam_role" "spacelift_integration" {
       Effect    = "Allow"
       Principal = { AWS = "arn:aws:iam::324880187172:root" }
       Action    = "sts:AssumeRole"
-      Condition = {
-        StringEquals = { "sts:ExternalId" = spacelift_aws_integration.this.external_id }
-      }
     }]
   })
 }
