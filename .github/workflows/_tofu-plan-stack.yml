@@ -144,25 +144,26 @@ jobs:
             echo "Stack '${{ inputs.spacelift_dep_stack }}' not found in Spacelift — cross-stack outputs unavailable. Plan will use stub values."
             exit 0
           }
+          # Only write a value to GITHUB_ENV when it is non-empty so that the
+          # stub values set by "Inject per-environment variables" are preserved
+          # when the upstream Spacelift stack exists but has no outputs yet.
+          write_if_set() {
+            local key="$1" val="$2"
+            [[ -n "$val" ]] && echo "${key}=${val}" >> "$GITHUB_ENV"
+          }
           if [[ "${{ inputs.stack_name }}" == "eks" ]]; then
-            {
-              echo "TF_VAR_vpc_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_id") | .value')"
-              echo "TF_VAR_subnet_ids=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="private_subnet_ids") | .value')"
-              echo "TF_VAR_vpc_cidr_block=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_cidr_block") | .value')"
-            } >> "$GITHUB_ENV"
+            write_if_set TF_VAR_vpc_id        "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_id") | .value')"
+            write_if_set TF_VAR_subnet_ids    "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="private_subnet_ids") | .value')"
+            write_if_set TF_VAR_vpc_cidr_block "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_cidr_block") | .value')"
           elif [[ "${{ inputs.stack_name }}" == "eks-addons" ]]; then
-            {
-              echo "TF_VAR_eks_cluster_name=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
-              echo "TF_VAR_eks_cluster_endpoint=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
-              echo "TF_VAR_cluster_ca_certificate=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
-              echo "TF_VAR_aws_lb_controller_role_arn=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="aws_lb_controller_role_arn") | .value')"
-            } >> "$GITHUB_ENV"
+            write_if_set TF_VAR_eks_cluster_name        "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
+            write_if_set TF_VAR_eks_cluster_endpoint    "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
+            write_if_set TF_VAR_cluster_ca_certificate  "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
+            write_if_set TF_VAR_aws_lb_controller_role_arn "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="aws_lb_controller_role_arn") | .value')"
           elif [[ "${{ inputs.stack_name }}" == "argo-cd" || "${{ inputs.stack_name }}" == "prometheus" ]]; then
-            {
-              echo "TF_VAR_eks_cluster_name=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
-              echo "TF_VAR_eks_cluster_endpoint=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
-              echo "TF_VAR_cluster_ca_certificate=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
-            } >> "$GITHUB_ENV"
+            write_if_set TF_VAR_eks_cluster_name       "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
+            write_if_set TF_VAR_eks_cluster_endpoint   "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
+            write_if_set TF_VAR_cluster_ca_certificate "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
           fi
 
       # -backend=false skips remote state initialisation — GitHub Actions does
