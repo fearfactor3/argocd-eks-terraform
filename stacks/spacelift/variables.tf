@@ -1,3 +1,15 @@
+variable "spacelift_account_id" {
+  description = "AWS account ID that Spacelift uses to assume the integration role (visible in Spacelift UI → Integrations → Trust relationship)"
+  type        = string
+  default     = "577638371743"
+}
+
+variable "spacelift_org_name" {
+  description = "Spacelift organization name — used as the ExternalId prefix in the trust policy (e.g. 'fearfactor3' for fearfactor3.app.spacelift.io)"
+  type        = string
+  default     = "fearfactor3"
+}
+
 variable "spacelift_space_id" {
   description = "Spacelift space to create stacks in (use 'root' for the default space)"
   type        = string

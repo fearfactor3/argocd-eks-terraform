@@ -21,9 +21,9 @@
 data "aws_caller_identity" "current" {}
 
 # Cross-account role that Spacelift assumes when running any attached stack.
-# The role_arn is constructed from the caller identity (not from the role resource)
-# so the integration is created first — breaking the dependency cycle and ensuring
-# external_id is populated when the IAM role trust policy is written.
+# Trust policy values (account ID and ExternalId pattern) are sourced from
+# var.spacelift_account_id and var.spacelift_org_name — visible in the Spacelift
+# UI under Integrations → spacelift → Trust relationship.
 resource "spacelift_aws_integration" "this" {
   name     = "spacelift"
   role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/spacelift-integration"
@@ -37,11 +37,11 @@ resource "aws_iam_role" "spacelift_integration" {
     Version = "2012-10-17"
     Statement = [{
       Effect    = "Allow"
-      Principal = { AWS = "arn:aws:iam::324880187172:root" }
+      Principal = { AWS = "arn:aws:iam::${var.spacelift_account_id}:root" }
       Action    = "sts:AssumeRole"
       Condition = {
-        StringEquals = {
-          "sts:ExternalId" = spacelift_aws_integration.this.external_id
+        StringLike = {
+          "sts:ExternalId" = "${var.spacelift_org_name}@*"
         }
       }
     }]
