@@ -1,5 +1,7 @@
 name: "[reusable] OpenTofu Plan Stack"
 
+# This workflow is called by plan.yml for each stack × environment combination.
+# It is not triggered directly — the workflow_call event makes it a reusable workflow.
 on:
   workflow_call:
     inputs:
@@ -17,14 +19,22 @@ on:
         required: false
         type: string
         default: "us-east-1"
+      environment:
+        description: "Environment name (e.g. dev, prod)"
+        required: false
+        type: string
+        default: ""
       spacelift_dep_stack:
-        description: "Spacelift stack ID to fetch cross-stack outputs from (empty = skip)"
+        description: "Full Spacelift stack ID to fetch cross-stack outputs from (e.g. network-dev)"
         required: false
         type: string
         default: ""
     secrets:
       AWS_ROLE_ARN:
         required: true
+      # Spacelift API keys are optional — if absent, cross-stack outputs are
+      # skipped and the plan runs with incomplete variable values. This is
+      # acceptable for initial bootstrapping before Spacelift is configured.
       SPACELIFT_API_KEY_ID:
         required: false
       SPACELIFT_API_KEY_SECRET:
@@ -39,6 +49,9 @@ jobs:
     name: plan
     runs-on: ubuntu-latest
     env:
+      # TF_IN_AUTOMATION suppresses interactive prompts and adjusts output
+      # formatting for CI — OpenTofu detects this and skips suggestions like
+      # "Did you forget to run tofu init?".
       TF_IN_AUTOMATION: "true"
     outputs:
       plan_summary: ${{ steps.extract.outputs.plan_summary }}
@@ -51,16 +64,70 @@ jobs:
         with:
           tofu_version: ${{ inputs.tofu_version }}
 
+      # The IAM role is assumed via OIDC — no long-lived AWS credentials are
+      # stored in GitHub. The trust policy (stacks/iam/main.tf) restricts
+      # assumption to pull_request events on this specific repository.
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ inputs.aws_region || 'us-east-1' }}
 
+      # Inject per-environment config variables as TF_VAR_* so no tfvars files are
+      # needed in each stack directory. Values mirror the defaults in
+      # stacks/spacelift/variables.tf. OpenTofu silently ignores any TF_VAR_*
+      # that do not match a declared variable in the target stack.
+      - name: Inject per-environment variables
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.environment }}" == "dev" ]]; then
+            {
+              echo "TF_VAR_environment=dev"
+              echo "TF_VAR_cluster_name=argocd-dev"
+              echo "TF_VAR_vpc_cidr=10.0.0.0/16"
+              echo 'TF_VAR_public_subnets=["10.0.1.0/24","10.0.2.0/24"]'
+              echo 'TF_VAR_private_subnets=["10.0.3.0/24","10.0.4.0/24"]'
+              echo "TF_VAR_vpc_cidr_block=10.0.0.0/16"
+              echo 'TF_VAR_public_access_cidrs=["0.0.0.0/0"]'
+              # Cross-stack stubs — overwritten by Fetch cross-stack outputs once
+              # Spacelift is bootstrapped. OpenTofu ignores vars with no matching
+              # variable declaration in the target stack.
+              echo "TF_VAR_vpc_id=vpc-00000000000000000"
+              echo 'TF_VAR_subnet_ids=["subnet-00000000000000000","subnet-11111111111111111"]'
+              echo "TF_VAR_eks_cluster_name=argocd-dev"
+              echo "TF_VAR_eks_cluster_endpoint=https://stub.gr7.us-east-1.eks.amazonaws.com"
+              echo "TF_VAR_cluster_ca_certificate=LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBMFZ3PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
+              echo "TF_VAR_aws_lb_controller_role_arn=arn:aws:iam::123456789012:role/argocd-dev-aws-lb-controller"
+            } >> "$GITHUB_ENV"
+          elif [[ "${{ inputs.environment }}" == "prod" ]]; then
+            {
+              echo "TF_VAR_environment=prod"
+              echo "TF_VAR_cluster_name=argocd-prod"
+              echo "TF_VAR_vpc_cidr=10.1.0.0/16"
+              echo 'TF_VAR_public_subnets=["10.1.1.0/24","10.1.2.0/24"]'
+              echo 'TF_VAR_private_subnets=["10.1.3.0/24","10.1.4.0/24"]'
+              echo "TF_VAR_vpc_cidr_block=10.1.0.0/16"
+              echo 'TF_VAR_public_access_cidrs=["0.0.0.0/0"]'
+              # Cross-stack stubs — overwritten by Fetch cross-stack outputs once
+              # Spacelift is bootstrapped. OpenTofu ignores vars with no matching
+              # variable declaration in the target stack.
+              echo "TF_VAR_vpc_id=vpc-11111111111111111"
+              echo 'TF_VAR_subnet_ids=["subnet-22222222222222222","subnet-33333333333333333"]'
+              echo "TF_VAR_eks_cluster_name=argocd-prod"
+              echo "TF_VAR_eks_cluster_endpoint=https://stub.gr7.us-east-1.eks.amazonaws.com"
+              echo "TF_VAR_cluster_ca_certificate=LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBMFZ3PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
+              echo "TF_VAR_aws_lb_controller_role_arn=arn:aws:iam::123456789012:role/argocd-prod-aws-lb-controller"
+            } >> "$GITHUB_ENV"
+          fi
+
       - name: Setup spacectl
         if: inputs.spacelift_dep_stack != ''
         uses: spacelift-io/setup-spacectl@d0e2c81467c31a68af60db5b1f9f1f54f79cab96 # v2.0.0
 
+      # Cross-stack outputs (e.g. vpc_id, cluster endpoint) are fetched from
+      # Spacelift and injected as TF_VAR_* environment variables so the plan
+      # has real values rather than empty strings. Without these, resource
+      # references that depend on other stacks would show as "(known after apply)".
       - name: Fetch cross-stack outputs
         if: inputs.spacelift_dep_stack != ''
         env:
@@ -69,11 +136,26 @@ jobs:
           SPACELIFT_API_KEY_SECRET: ${{ secrets.SPACELIFT_API_KEY_SECRET }}
         run: |
           set -euo pipefail
-          OUTPUTS=$(spacectl stack outputs --id "${{ inputs.spacelift_dep_stack }}" --output json)
+          if [[ -z "${SPACELIFT_API_KEY_ID:-}" || -z "${SPACELIFT_API_KEY_SECRET:-}" ]]; then
+            echo "Spacelift API keys not configured — skipping cross-stack output fetch. Plan may be incomplete."
+            exit 0
+          fi
+          OUTPUTS=$(spacectl stack outputs --id "${{ inputs.spacelift_dep_stack }}" --output json 2>&1) || {
+            echo "Stack '${{ inputs.spacelift_dep_stack }}' not found in Spacelift — cross-stack outputs unavailable. Plan will use stub values."
+            exit 0
+          }
           if [[ "${{ inputs.stack_name }}" == "eks" ]]; then
             {
               echo "TF_VAR_vpc_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_id") | .value')"
               echo "TF_VAR_subnet_ids=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="private_subnet_ids") | .value')"
+              echo "TF_VAR_vpc_cidr_block=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_cidr_block") | .value')"
+            } >> "$GITHUB_ENV"
+          elif [[ "${{ inputs.stack_name }}" == "eks-addons" ]]; then
+            {
+              echo "TF_VAR_eks_cluster_name=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
+              echo "TF_VAR_eks_cluster_endpoint=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
+              echo "TF_VAR_cluster_ca_certificate=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
+              echo "TF_VAR_aws_lb_controller_role_arn=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="aws_lb_controller_role_arn") | .value')"
             } >> "$GITHUB_ENV"
           elif [[ "${{ inputs.stack_name }}" == "argo-cd" || "${{ inputs.stack_name }}" == "prometheus" ]]; then
             {
@@ -83,6 +165,9 @@ jobs:
             } >> "$GITHUB_ENV"
           fi
 
+      # -backend=false skips remote state initialisation — GitHub Actions does
+      # not need (or have credentials for) the Spacelift backend. Plans run
+      # against local state, which is sufficient for drift detection on PRs.
       - name: Init
         run: tofu -chdir=stacks/${{ inputs.stack_name }} init -backend=false -input=false
 
@@ -93,6 +178,8 @@ jobs:
             -input=false \
             -no-color 2>&1 | tee /tmp/${{ inputs.stack_name }}-plan.txt
 
+      # Extract the summary line so plan.yml can aggregate it into a PR comment
+      # without having to parse the full plan output.
       - name: Extract plan summary
         id: extract
         if: always()
@@ -114,7 +201,7 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         if: always()
         with:
-          name: opentofu-plan-${{ inputs.stack_name }}
+          name: opentofu-plan-${{ inputs.stack_name }}-${{ inputs.environment || 'shared' }}
           path: /tmp/${{ inputs.stack_name }}-plan.txt
           if-no-files-found: warn
           retention-days: 14
@@ -122,10 +209,19 @@ jobs:
       - name: Add job summary
         if: always()
         run: |
+          PLAN_FILE="/tmp/${{ inputs.stack_name }}-plan.txt"
           {
-            echo "## OpenTofu plan: ${{ inputs.stack_name }}"
+            echo "## OpenTofu plan: ${{ inputs.stack_name }}/${{ inputs.environment || 'shared' }}"
             echo ""
-            echo "${{ steps.extract.outputs.plan_summary }}"
+            echo "**${{ steps.extract.outputs.plan_summary }}**"
             echo ""
-            echo "Full output in artifact: \`opentofu-plan-${{ inputs.stack_name }}\`"
+            if [[ -f "$PLAN_FILE" ]]; then
+              echo "<details><summary>Full plan output</summary>"
+              echo ""
+              echo '```'
+              cat "$PLAN_FILE"
+              echo '```'
+              echo ""
+              echo "</details>"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

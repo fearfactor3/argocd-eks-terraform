@@ -13,6 +13,7 @@ AVD-AWS-0104
 # and internet-facing load balancers. This is expected behaviour for public subnets.
 AVD-AWS-0164
 
-# VPC flow logs are not yet implemented. Pending decision on log destination
-# (CloudWatch, Loki, or Firehose). Will be removed when flow logs are added.
-AVD-AWS-0178
+# CloudWatch log groups (EKS control plane, VPC flow logs) use AWS-managed encryption
+# by default. A customer-managed KMS CMK would add $1/key/month per environment with
+# no material security benefit for this test environment — logs are not PII/PCI-scoped.
+AVD-AWS-0017

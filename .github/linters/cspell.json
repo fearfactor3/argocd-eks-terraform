@@ -1,7 +1,7 @@
 {
   "version": "0.2",
   "language": "en",
-  "dictionaries": ["en_US", "softwareTerms", "bash"],
+  "dictionaries": ["en_US", "en-gb", "softwareTerms", "bash", "aws", "k8s", "terraform"],
   "ignorePaths": [
     ".terraform/",
     ".terraform.lock.hcl",
@@ -89,7 +89,35 @@
     "aquasecurity",
     "beatlabs",
     "sarif",
-    "SARIF"
+    "SARIF",
+    "rego",
+    "OPA",
+    "sprintf",
+    "loki",
+    "alloy",
+    "promtail",
+    "cloudwatch",
+    "datasource",
+    "datasources",
+    "singleBinary",
+    "replication",
+    "setproduct",
+    "EBSCSI",
+    "misconfig",
+    "Karpenter",
+    "Kubeconform",
+    "kubeseal",
+    "IMDS",
+    "Coip",
+    "rtype",
+    "ingester",
+    "visualised",
+    "visualise",
+    "materialises",
+    "centralised",
+    "behaviours",
+    "underutilization",
+    "misconfigs"
   ],
   "ignoreWords": [],
   "overrides": [
@@ -99,6 +127,12 @@
         "arn:aws:[\\w:/-]+",
         "[a-z]+\\.[a-z_]+\\.[a-z_]+",
         "[0-9a-f]{40}"
+      ]
+    },
+    {
+      "filename": "**/*.rego",
+      "ignoreRegExpList": [
+        "[a-z_]+\\.[a-z_]+"
       ]
     }
   ]

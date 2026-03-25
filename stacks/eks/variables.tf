@@ -7,7 +7,6 @@ variable "aws_region" {
 variable "cluster_name" {
   description = "Name of the EKS cluster"
   type        = string
-  default     = "argocd-cluster"
 }
 
 variable "cluster_version" {
@@ -17,9 +16,13 @@ variable "cluster_version" {
 }
 
 variable "environment" {
-  description = "Environment name"
+  description = "Environment name (e.g. dev, prod)"
   type        = string
-  default     = "Dev"
+
+  validation {
+    condition     = contains(["dev", "prod"], var.environment)
+    error_message = "environment must be \"dev\" or \"prod\"."
+  }
 }
 
 variable "node_group_desired_capacity" {
@@ -44,6 +47,18 @@ variable "node_group_instance_types" {
   description = "Instance types for the node group"
   type        = list(string)
   default     = ["t3.medium"]
+}
+
+variable "node_capacity_type" {
+  description = "Capacity type for the node group. SPOT for dev (~60-70% cheaper); ON_DEMAND for prod."
+  type        = string
+  default     = "ON_DEMAND"
+}
+
+variable "enable_scheduled_scaling" {
+  description = "Scale node group to 0 each weekday evening and restore each morning. Reduces EC2 costs ~70% for dev clusters."
+  type        = bool
+  default     = false
 }
 
 variable "public_access_cidrs" {
@@ -78,6 +93,11 @@ variable "ebs_csi_addon_version" {
 # Cross-stack inputs from the network stack (injected by Spacelift as TF_VAR_*)
 variable "vpc_id" {
   description = "VPC ID from the network stack"
+  type        = string
+}
+
+variable "vpc_cidr_block" {
+  description = "VPC CIDR block from the network stack — scopes the EKS cluster SG ingress rule without a data lookup"
   type        = string
 }
 

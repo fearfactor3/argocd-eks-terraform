@@ -8,14 +8,24 @@ on:
       - ".github/workflows/validate.yml"
       - "stacks/**"
       - "modules/**"
+      - ".regal/config.yaml"
+      - ".github/linters/.tflint.hcl"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Cancel any in-progress run for the same branch when a new commit is pushed.
+# This prevents queue build-up on force-pushed branches and avoids wasting
+# runner minutes on superseded commits.
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
+
+# Single source of truth for the OpenTofu version — referenced by both the fmt
+# and validate jobs so they always use the same binary.
+env:
+  TOFU_VERSION: "~1.10"
 
 jobs:
   fmt:
@@ -28,22 +38,26 @@ jobs:
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@fc711fa910b93cba0f3fbecaafc9f42fd0c411cb # v2.0.0
         with:
-          tofu_version: "~1.10"
+          tofu_version: ${{ env.TOFU_VERSION }}
 
       - name: Check formatting
-        run: tofu fmt -check -recursive .
+        run: make fmt-check
 
   validate:
     name: Validate (${{ matrix.stack }})
+    # fmt must pass first — no point validating badly formatted code.
     needs: [fmt]
     runs-on: ubuntu-latest
     strategy:
+      # fail-fast: false lets all matrix legs run even if one fails, so a
+      # single broken stack does not hide failures in the others.
       fail-fast: false
       matrix:
         stack:
           - iam
           - network
           - eks
+          - eks-addons
           - argo-cd
           - prometheus
           - spacelift
@@ -54,13 +68,72 @@ jobs:
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@fc711fa910b93cba0f3fbecaafc9f42fd0c411cb # v2.0.0
         with:
-          tofu_version: "~1.10"
+          tofu_version: ${{ env.TOFU_VERSION }}
 
+      # -backend=false skips remote state — GitHub Actions does not have
+      # Spacelift backend credentials and does not need them for validation.
       - name: Init (no backend)
         run: tofu -chdir=stacks/${{ matrix.stack }} init -backend=false
 
       - name: Validate
         run: tofu -chdir=stacks/${{ matrix.stack }} validate
+
+  test-policies:
+    name: Test Rego policies
+    # Runs independently of fmt/validate — policy changes need testing even if
+    # no .tf files changed (and vice versa).
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # OPA is downloaded from GitHub releases with SHA256 verification.
+      # The version is tracked by Renovate via the inline comment below.
+      - name: Install OPA
+        env:
+          OPA_VERSION: "1.14.1" # renovate: datasource=github-releases depName=open-policy-agent/opa extractVersion=^v(?<version>.+)$
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}"
+          curl -fsSL -o /tmp/opa        "${BASE}/opa_linux_amd64_static"
+          curl -fsSL -o /tmp/opa.sha256 "${BASE}/opa_linux_amd64_static.sha256"
+          # Rewrite the path in the checksum file to match where we downloaded
+          # the binary, then verify. This catches corrupted or tampered downloads.
+          sed 's|opa_linux_amd64_static|/tmp/opa|' /tmp/opa.sha256 | sha256sum --check
+          install /tmp/opa /usr/local/bin/opa
+          opa version
+
+      - name: Check and test policies
+        run: make check-policies
+
+  test-modules:
+    name: Test modules
+    # Runs native OpenTofu tests against modules/network and modules/eks.
+    # Uses mock_provider so no AWS credentials are required — zero cost.
+    # Runs independently of fmt/validate because module tests exercise logic
+    # that validate alone does not cover (assertions on resource attributes).
+    needs: [fmt]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@fc711fa910b93cba0f3fbecaafc9f42fd0c411cb # v2.0.0
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      - name: Init network module
+        run: tofu -chdir=modules/network init -backend=false
+
+      - name: Test network module
+        run: tofu -chdir=modules/network test
+
+      - name: Init eks module
+        run: tofu -chdir=modules/eks init -backend=false
+
+      - name: Test eks module
+        run: tofu -chdir=modules/eks test
 
   tflint:
     name: tflint
@@ -79,4 +152,4 @@ jobs:
         run: tflint --init --config .github/linters/.tflint.hcl
 
       - name: Run tflint
-        run: tflint --recursive --config "$(pwd)/.github/linters/.tflint.hcl"
+        run: make tflint

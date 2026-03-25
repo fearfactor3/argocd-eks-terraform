@@ -21,6 +21,15 @@
     },
     {
       "customType": "regex",
+      "description": "OPA version in validate.yml",
+      "fileMatch": ["\\.github/workflows/validate\\.yml"],
+      "matchStrings": ["OPA_VERSION:\\s+\"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "open-policy-agent/opa",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
       "description": "ArgoCD Helm chart version in variables.tf",
       "fileMatch": ["stacks/argo-cd/variables\\.tf"],
       "matchStrings": [
@@ -42,6 +51,30 @@
       "packageNameTemplate": "prometheus-community/helm-charts",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^kube-prometheus-stack-(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Loki Helm chart version in variables.tf",
+      "fileMatch": ["stacks/prometheus/variables\\.tf"],
+      "matchStrings": [
+        "loki_chart_version[\\s\\S]*?default\\s+=\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "loki",
+      "packageNameTemplate": "grafana/helm-charts",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^loki-(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Grafana Alloy Helm chart version in variables.tf",
+      "fileMatch": ["stacks/prometheus/variables\\.tf"],
+      "matchStrings": [
+        "alloy_chart_version[\\s\\S]*?default\\s+=\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "alloy",
+      "packageNameTemplate": "grafana/helm-charts",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^alloy-(?<version>.*)$"
     }
   ]
 }

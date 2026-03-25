@@ -17,3 +17,8 @@ output "vpc_cidr_block" {
   description = "CIDR block of the VPC"
   value       = module.network.vpc_cidr_block
 }
+
+output "vpc_flow_log_group_name" {
+  description = "CloudWatch log group name receiving VPC flow logs"
+  value       = module.network.vpc_flow_log_group_name
+}
