@@ -1,20 +1,3 @@
-variable "spacelift_api_url" {
-  description = "Your Spacelift account URL (e.g. https://yourco.app.spacelift.io)"
-  type        = string
-}
-
-variable "spacelift_api_key_id" {
-  description = "Spacelift API key ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "spacelift_api_key_secret" {
-  description = "Spacelift API key secret"
-  type        = string
-  sensitive   = true
-}
-
 variable "spacelift_space_id" {
   description = "Spacelift space to create stacks in (use 'root' for the default space)"
   type        = string

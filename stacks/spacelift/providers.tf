@@ -1,5 +1,4 @@
-provider "spacelift" {
-  api_key_endpoint = var.spacelift_api_url
-  api_key_id       = var.spacelift_api_key_id
-  api_key_secret   = var.spacelift_api_key_secret
-}
+# When running inside a Spacelift run the provider auto-configures from the
+# injected SPACELIFT_API_KEY_ENDPOINT / _ID / _SECRET environment variables.
+# No explicit credentials needed here.
+provider "spacelift" {}
