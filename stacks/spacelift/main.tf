@@ -46,6 +46,10 @@ resource "spacelift_aws_integration_attachment" "env" {
   stack_id       = spacelift_stack.env[each.key].id
   read           = true
   write          = true
+
+  # Spacelift validates the trust relationship at attachment time, so the IAM
+  # role and its policy must exist before any attachment is attempted.
+  depends_on = [aws_iam_role_policy_attachment.spacelift_integration]
 }
 
 resource "spacelift_aws_integration_attachment" "iam" {
@@ -53,6 +57,8 @@ resource "spacelift_aws_integration_attachment" "iam" {
   stack_id       = spacelift_stack.iam.id
   read           = true
   write          = true
+
+  depends_on = [aws_iam_role_policy_attachment.spacelift_integration]
 }
 
 locals {
