@@ -75,49 +75,88 @@ Note: `tofu init` succeeds without these variables — only `plan` and `apply` r
 
 **Symptom:** Apply fails on all `spacelift_aws_integration_attachment` resources with `unauthorized: you need to configure trust relationship section in your AWS account`.
 
-**Cause A:** The `aws_iam_role.spacelift_integration` and `spacelift_aws_integration_attachment` resources were created in parallel. Spacelift validates the trust relationship at attachment time, before AWS IAM has propagated the new role globally (IAM is eventually consistent).
+Spacelift validates the trust policy contents at attachment time — it inspects the policy, not just attempts `AssumeRole`. Both the Principal account ID and the ExternalId condition must match exactly what Spacelift expects for your organization.
 
-**Fix A:** The `time_sleep.iam_propagation` resource (30s delay) handles this for new runs. If it fails on the first run, trigger a re-run — subsequent runs skip the sleep (role already exists) but the trust relationship is now visible.
+---
 
-**Cause B:** The IAM role's trust policy was created with an empty `ExternalId`. This can happen if the role was tainted and recreated from a cached state before `spacelift_aws_integration.this.external_id` was populated, or if running against stale code.
+**Cause A:** IAM propagation — the role was just created and hasn't propagated globally yet.
 
-**Diagnosis:**
+**Fix A:** The `time_sleep.iam_propagation` resource (30s delay) handles this for new runs. If it fails on the first run, trigger a re-run — the role will be visible by then.
+
+---
+
+**Cause B:** Wrong Spacelift AWS account ID or ExternalId pattern in the trust policy.
+
+Spacelift does not use a universal AWS account — the account ID varies by organization. The `spacelift_aws_integration` provider resource does **not** reliably export these values. The authoritative source is the Spacelift UI.
+
+**Diagnosis — get the exact trust policy Spacelift expects:**
+
+In the Spacelift UI → **Integrations** → click the integration → look for a **Trust relationship** section. It shows the exact policy including the account ID and ExternalId pattern. For this org it looks like:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": { "AWS": "577638371743" },
+    "Action": "sts:AssumeRole",
+    "Condition": {
+      "StringLike": { "sts:ExternalId": "fearfactor3@*" }
+    }
+  }]
+}
+```
+
+Key points:
+
+- **Principal** is the Spacelift infrastructure account (`577638371743` for this org — not `324880187172`)
+- **Condition operator** is `StringLike`, not `StringEquals`
+- **ExternalId** is an org-scoped wildcard pattern (`<org-name>@*`), not a UUID
+
+**Diagnosis — check what the live role actually has:**
 
 ```sh
 aws iam get-role --role-name spacelift-integration \
   --query 'Role.AssumeRolePolicyDocument' \
   --output json
-# Look for "sts:ExternalId": "" — empty string confirms this cause
-# Or check that the Principal uses the correct aws_account_id (not a hardcoded value)
 ```
 
-**Fix B:** The trust policy must include both the correct Spacelift AWS account ID and the ExternalId that Spacelift validates during attachment. The current code derives both from `spacelift_aws_integration.this` (which is created before the IAM role, so `external_id` and `aws_account_id` are always populated).
+Compare the Principal account ID and Condition to the expected values above.
 
-If the role is in a bad state, patch it directly using the values from the live integration:
+**Fix B:** The correct values are in `var.spacelift_account_id` (default `577638371743`) and `var.spacelift_org_name` (default `fearfactor3`) in [stacks/spacelift/variables.tf](../../stacks/spacelift/variables.tf). If those variables are correct, triggering a new run will update the role in-place.
+
+To unblock immediately without waiting for a Spacelift run, patch the role directly:
 
 ```sh
-# Get the correct values from the Spacelift integration resource
-EXTERNAL_ID=$(tofu -chdir=stacks/spacelift output -raw spacelift_external_id 2>/dev/null)
-AWS_ACCOUNT_ID=$(tofu -chdir=stacks/spacelift output -raw spacelift_aws_account_id 2>/dev/null)
-
-# Or read them from the Spacelift provider state via spacectl / Spacelift UI
-# Then patch the role:
 aws iam update-assume-role-policy \
   --role-name spacelift-integration \
-  --policy-document "{
-    \"Version\": \"2012-10-17\",
-    \"Statement\": [{
-      \"Effect\": \"Allow\",
-      \"Principal\": { \"AWS\": \"arn:aws:iam::${AWS_ACCOUNT_ID}:root\" },
-      \"Action\": \"sts:AssumeRole\",
-      \"Condition\": {
-        \"StringEquals\": { \"sts:ExternalId\": \"${EXTERNAL_ID}\" }
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::577638371743:root" },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringLike": { "sts:ExternalId": "fearfactor3@*" }
       }
     }]
-  }"
+  }'
 ```
 
 Then trigger a new run.
+
+---
+
+**Cause C:** The role was tainted and recreated, but `time_sleep.iam_propagation` did not re-run because it was already in state.
+
+**Fix C:** Taint the sleep resource so the 30s delay runs again on the next apply:
+
+```sh
+spacectl stack task --id argocd-eks-terraform -- \
+  tofu state rm time_sleep.iam_propagation
+```
+
+Then trigger a new run — `time_sleep` will be recreated (triggering the 30s delay) before the attachments are attempted.
 
 ---
 
