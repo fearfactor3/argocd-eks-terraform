@@ -9,9 +9,13 @@ crash.*.log
 .terraformrc
 terraform.rc
 
-# Variable files (may contain secrets)
-*.tfvars
-*.tfvars.json
+# Variable files — per-environment tfvars are tracked (no secrets);
+# only ignore auto-loaded and local override files.
+terraform.tfvars
+terraform.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
+*.local.tfvars
 
 # Plan files
 *.tfplan
