@@ -117,7 +117,9 @@
     "centralised",
     "behaviours",
     "underutilization",
-    "misconfigs"
+    "misconfigs",
+    "pss",
+    "setvar"
   ],
   "ignoreWords": [],
   "overrides": [
