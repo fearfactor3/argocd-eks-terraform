@@ -1,5 +1,59 @@
 # Bootstrap note: Create this management stack manually in the Spacelift UI
 # (project_root = stacks/spacelift), then apply once to provision the app stacks.
+#
+# First-run bootstrap: the management stack needs static AWS credentials on its
+# first apply so it can create the spacelift-integration IAM role. Set
+# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN in the
+# management stack's Environment tab, trigger the run, then remove them — all
+# subsequent runs use the spacelift_aws_integration_attachment below.
+
+data "aws_caller_identity" "current" {}
+
+# Cross-account role that Spacelift assumes when running any attached stack.
+# The role_arn is constructed from the caller identity so OpenTofu can resolve
+# it without a dependency cycle (integration → external_id → role → role_arn).
+resource "spacelift_aws_integration" "this" {
+  name     = "spacelift"
+  role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/spacelift-integration"
+}
+
+resource "aws_iam_role" "spacelift_integration" {
+  name        = "spacelift-integration"
+  description = "Assumed by Spacelift for plan and apply runs across all stacks"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { AWS = "arn:aws:iam::324880187172:root" }
+      Action    = "sts:AssumeRole"
+      Condition = {
+        StringEquals = { "sts:ExternalId" = spacelift_aws_integration.this.external_id }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "spacelift_integration" {
+  role       = aws_iam_role.spacelift_integration.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
+# Attach the integration to every app stack so they receive AWS credentials.
+resource "spacelift_aws_integration_attachment" "env" {
+  for_each       = local.env_stacks
+  integration_id = spacelift_aws_integration.this.id
+  stack_id       = spacelift_stack.env[each.key].id
+  read           = true
+  write          = true
+}
+
+resource "spacelift_aws_integration_attachment" "iam" {
+  integration_id = spacelift_aws_integration.this.id
+  stack_id       = spacelift_stack.iam.id
+  read           = true
+  write          = true
+}
 
 locals {
   env_stack_types = {

@@ -145,6 +145,13 @@ github-actions-plan IAM role  (read-only: Describe/List/Get)
   │  used for: tofu plan in CI
   │  cannot: apply, destroy, or write anything
 
+Spacelift (plan + apply runs)
+  │  cross-account sts:AssumeRole + ExternalId
+  ▼
+spacelift-integration IAM role  (AdministratorAccess)
+  │  used for: all Spacelift plan and apply runs
+  │  scoped to: Spacelift's AWS account + integration ExternalId
+
 EKS nodes (EC2)
   │  EC2 instance profile
   ▼
@@ -230,6 +237,7 @@ Pull request opened / updated
   ├── opentofu-plan
   │     ├── plan network-dev, network-prod
   │     ├── plan eks-dev, eks-prod
+  │     ├── plan eks-addons-dev, eks-addons-prod
   │     ├── plan argo-cd-dev, argo-cd-prod
   │     ├── plan prometheus-dev, prometheus-prod
   │     └── aggregate results → PR comment

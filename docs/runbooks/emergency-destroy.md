@@ -53,7 +53,15 @@ spacectl stack run trigger --id prometheus-prod \
   --type DESTROY
 ```
 
-**2. eks-prod** (after both above complete):
+**2. eks-addons-prod** (after both above complete):
+
+```sh
+spacectl stack run trigger --id eks-addons-prod \
+  --metadata '{"allow_destruction": "true"}' \
+  --type DESTROY
+```
+
+**3. eks-prod** (after eks-addons-prod completes):
 
 ```sh
 spacectl stack run trigger --id eks-prod \
@@ -61,7 +69,7 @@ spacectl stack run trigger --id eks-prod \
   --type DESTROY
 ```
 
-**3. network-prod** (after eks-prod completes):
+**4. network-prod** (after eks-prod completes):
 
 ```sh
 spacectl stack run trigger --id network-prod \
