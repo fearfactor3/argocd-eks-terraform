@@ -40,8 +40,9 @@ See [docs/architecture.md](docs/architecture.md) for the full system design, com
 │   ├── iam/                  # GitHub Actions OIDC provider + plan role
 │   ├── network/              # Deploys the network module
 │   ├── eks/                  # Deploys the eks module (depends on network)
-│   ├── argo-cd/              # Deploys Argo CD (depends on eks)
-│   ├── prometheus/           # Deploys Prometheus stack (depends on eks)
+│   ├── eks-addons/           # AWS Load Balancer Controller (depends on eks)
+│   ├── argo-cd/              # Deploys Argo CD (depends on eks-addons)
+│   ├── prometheus/           # Deploys Prometheus stack (depends on eks-addons)
 │   └── spacelift/            # Spacelift stack definitions (meta-stack)
 ├── docs/                     # Additional documentation
 │   ├── architecture.md       # System design, components, security model, observability pipeline
@@ -53,8 +54,14 @@ See [docs/architecture.md](docs/architecture.md) for the full system design, com
 │   │   ├── 001-spacelift-over-atlantis.md
 │   │   ├── 002-loki-over-cloudwatch-insights.md
 │   │   ├── 003-single-nat-gateway.md
-│   │   └── 004-irsa-over-node-role.md
+│   │   ├── 004-irsa-over-node-role.md
+│   │   ├── 005-nlb-per-service-vs-alb-ingress.md
+│   │   ├── 006-argocd-app-repo.md
+│   │   ├── 007-cluster-autoscaler-vs-karpenter.md
+│   │   ├── 008-secrets-management.md
+│   │   └── 009-tls-and-ingress.md
 │   └── runbooks/
+│       ├── initial-bootstrap.md  # First-time deployment procedure
 │       └── emergency-destroy.md  # Production destruction procedure
 ├── .mega-linter.yml          # MegaLinter configuration
 ├── .pre-commit-config.yaml   # Pre-commit hooks
@@ -103,16 +110,16 @@ Stacks have explicit dependencies managed by Spacelift. Each environment (`dev`,
 ```text
 iam (shared, once per account)
 
-network-dev → eks-dev → argo-cd-dev
-                      → prometheus-dev
+network-dev → eks-dev → eks-addons-dev → argo-cd-dev
+                                       → prometheus-dev
 
-network-prod → eks-prod → argo-cd-prod
-                        → prometheus-prod
+network-prod → eks-prod → eks-addons-prod → argo-cd-prod
+                                          → prometheus-prod
 ```
 
 The `spacelift` stack is a meta-stack that manages all app stacks as code, including dependencies and per-environment variable injection.
 
-Cross-stack outputs (e.g., VPC ID from `network-<env>`, cluster endpoint from `eks-<env>`) are injected by Spacelift as `TF_VAR_*` environment variables into dependent stacks automatically.
+Cross-stack outputs (e.g., VPC ID from `network-<env>`, cluster endpoint from `eks-addons-<env>`) are injected by Spacelift as `TF_VAR_*` environment variables into dependent stacks automatically.
 
 ## CI/CD
 
@@ -214,33 +221,46 @@ Per-environment values (`cluster_name`, `environment`, `node_group_*`) are injec
 | `kube_proxy_addon_version` | kube-proxy managed add-on version | `v1.32.6-eksbuild.12` |
 | `ebs_csi_addon_version` | aws-ebs-csi-driver managed add-on version | `v1.56.0-eksbuild.1` |
 
+### eks-addons
+
+Deploys cluster-level Helm add-ons that must be running before any `Ingress` resources are created. Also re-exports EKS cluster credentials as outputs so downstream stacks receive them via the `eks-addons` dependency rather than directly from `eks`.
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `aws_region` | AWS region | `us-east-1` |
+| `environment` | Environment name (e.g. `dev`, `prod`) | — injected by Spacelift |
+| `eks_cluster_name` | EKS cluster name (from `eks-<env>` stack) | — injected by Spacelift |
+| `eks_cluster_endpoint` | EKS API endpoint (from `eks-<env>` stack) | — injected by Spacelift |
+| `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-<env>` stack) | — injected by Spacelift |
+| `aws_lb_controller_role_arn` | IRSA role ARN for AWS Load Balancer Controller (from `eks-<env>` stack) | — injected by Spacelift |
+
 ### argo-cd
 
-Deploys Argo CD via Helm with an NLB service. Cross-stack inputs are injected by Spacelift from the `eks-<env>` stack.
+Deploys Argo CD via Helm with an ALB Ingress. Cross-stack inputs are injected by Spacelift from the `eks-addons-<env>` stack.
 
 | Variable | Description | Default |
 | --- | --- | --- |
 | `aws_region` | AWS region | `us-east-1` |
 | `environment` | Environment name (e.g. `dev`, `prod`) | — injected by Spacelift |
 | `argocd_chart_version` | Argo CD Helm chart version | `9.4.1` |
-| `eks_cluster_name` | EKS cluster name (from `eks-<env>` stack) | — injected by Spacelift |
-| `eks_cluster_endpoint` | EKS API endpoint (from `eks-<env>` stack) | — injected by Spacelift |
-| `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-<env>` stack) | — injected by Spacelift |
+| `eks_cluster_name` | EKS cluster name (from `eks-addons-<env>` stack) | — injected by Spacelift |
+| `eks_cluster_endpoint` | EKS API endpoint (from `eks-addons-<env>` stack) | — injected by Spacelift |
+| `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-addons-<env>` stack) | — injected by Spacelift |
 
 Outputs: `argocd_release_namespace`, `argocd_server_load_balancer`, initial admin password retrieval command, kubeconfig update command.
 
 ### prometheus
 
-Deploys the kube-prometheus-stack (Prometheus, Grafana, Alertmanager) via Helm. Grafana uses an NLB service with a 50 Gi persistent volume; Prometheus uses a 50 Gi persistent volume. A `gp3` storage class is created as the cluster default. Cross-stack inputs are injected by Spacelift from the `eks-<env>` stack.
+Deploys the kube-prometheus-stack (Prometheus, Grafana, Alertmanager) via Helm. Grafana uses an ALB Ingress; Prometheus uses a persistent volume. A `gp3` storage class is created as the cluster default. Cross-stack inputs are injected by Spacelift from the `eks-addons-<env>` stack.
 
 | Variable | Description | Default |
 | --- | --- | --- |
 | `aws_region` | AWS region | `us-east-1` |
 | `environment` | Environment name (e.g. `dev`, `prod`) | — injected by Spacelift |
 | `prometheus_chart_version` | kube-prometheus-stack Helm chart version | `81.5.0` |
-| `eks_cluster_name` | EKS cluster name (from `eks-<env>` stack) | — injected by Spacelift |
-| `eks_cluster_endpoint` | EKS API endpoint (from `eks-<env>` stack) | — injected by Spacelift |
-| `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-<env>` stack) | — injected by Spacelift |
+| `eks_cluster_name` | EKS cluster name (from `eks-addons-<env>` stack) | — injected by Spacelift |
+| `eks_cluster_endpoint` | EKS API endpoint (from `eks-addons-<env>` stack) | — injected by Spacelift |
+| `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-addons-<env>` stack) | — injected by Spacelift |
 
 Outputs: `prometheus_release_namespace`, `grafana_load_balancer`, Grafana admin password retrieval command.
 
@@ -253,9 +273,11 @@ Per-environment defaults are controlled via the `environments` variable in `stac
 | Setting | dev | prod |
 | --- | --- | --- |
 | Instance type | `t3.medium` | `t3.large` |
-| Desired nodes | `2` | `3` |
+| Desired nodes | `1` | `3` |
 | Max nodes | `3` | `6` |
 | Min nodes | `1` | `2` |
+| Capacity type | `SPOT` | `ON_DEMAND` |
+| Scheduled scaling | enabled (scale to 0 evenings) | disabled |
 | Autodeploy | `true` | `false` |
 
 Override at apply time with `-var` flags or Spacelift environment variables.
@@ -309,10 +331,11 @@ Format: `type(scope): short description`
 | --- | --- |
 | `network` | VPC, subnets, NAT gateway, route tables |
 | `eks` | EKS cluster, node group, IAM roles, add-ons |
+| `eks-addons` | AWS Load Balancer Controller and cluster-level add-ons |
 | `argo-cd` | Argo CD Helm release |
 | `prometheus` | kube-prometheus-stack Helm release |
 | `iam` | GitHub Actions OIDC provider and plan role |
-| `spacelift` | Spacelift stack definitions |
+| `spacelift` | Spacelift stack definitions and AWS integration |
 | `ci` | GitHub Actions workflows and MegaLinter config |
 | `deps` | Dependency updates (Renovate, pre-commit hooks) |
 | `docs` | README and documentation |
@@ -332,10 +355,10 @@ refactor(modules): add required_providers blocks to all modules
 
 ## Cleanup
 
-Spacelift manages destroy runs — use `spacectl` or the Spacelift UI to trigger them in reverse dependency order (argo-cd/prometheus → eks → network). For production environments, see the [Emergency: Destroying Production Infrastructure](docs/runbooks/emergency-destroy.md) runbook which covers the required approval flow and override flag.
+Spacelift manages destroy runs — use `spacectl` or the Spacelift UI to trigger destroy tasks in reverse dependency order:
 
-For the IAM stack (deployed outside Spacelift):
-
-```sh
-tofu -chdir=stacks/iam destroy
+```text
+argo-cd-dev + prometheus-dev → eks-addons-dev → eks-dev → network-dev
 ```
+
+For production environments, see the [Emergency: Destroying Production Infrastructure](docs/runbooks/emergency-destroy.md) runbook which covers the required approval flow and override flag.

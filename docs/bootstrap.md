@@ -4,30 +4,7 @@ One-time setup steps to make CI/CD workflows functional. Complete these steps in
 
 ---
 
-## Step 1: Apply the IAM Stack
-
-The `stacks/iam` stack creates the GitHub Actions OIDC provider and a read-only plan
-role. It runs outside Spacelift and must be applied manually first.
-
-```sh
-cd stacks/iam
-tofu init
-tofu plan -var="github_org=<your-github-user-or-org>" -var="github_repo=argocd-eks-terraform"
-tofu apply -var="github_org=<your-github-user-or-org>" -var="github_repo=argocd-eks-terraform"
-```
-
-Set the role ARN as a GitHub secret:
-
-```sh
-gh secret set AWS_ROLE_ARN --body "$(tofu output -raw github_actions_plan_role_arn)"
-```
-
-The role is scoped to `pull_request` events only with read-only permissions. No write
-access is granted — plan only.
-
----
-
-## Step 2: Configure GitHub Secrets and Variables
+## Step 1: Configure GitHub Secrets and Variables
 
 ```sh
 gh secret set SPACELIFT_API_KEY_ID     --body "<key-id>"
@@ -40,39 +17,84 @@ See [Spacelift](spacelift.md) for instructions on creating the API key.
 
 ---
 
-## Step 3: Bootstrap the Spacelift Stack
+## Step 2: Bootstrap the Spacelift Management Stack
 
-The `stacks/spacelift` stack defines all application stacks and their dependencies as
-code. It must be bootstrapped manually once:
+The `stacks/spacelift` stack manages all other stacks as code. It must be created manually once in the Spacelift UI, then triggered to run.
 
-1. In the Spacelift UI, create a new stack manually:
-   - **Repository:** `argocd-eks-terraform`
-   - **Project root:** `stacks/spacelift`
-   - **Branch:** `main`
-   - **Tool:** OpenTofu
-   - **Autodeploy:** enabled — the management stack must apply automatically to create the app stacks
+### 2a — Create the management stack
 
-1. Apply the stack from the Spacelift UI. This creates all app stacks (`iam`, `network-dev`,
-   `network-prod`, `eks-dev`, `eks-prod`, `argo-cd-dev`, `argo-cd-prod`, `prometheus-dev`,
-   `prometheus-prod`) and wires their dependencies.
+In the Spacelift UI, create a new stack:
 
-   Dev stacks have autodeploy enabled — merges to `main` apply automatically.
-   Prod stacks have autodeploy disabled — every run stops at the approval gate before applying.
+- **Repository:** `argocd-eks-terraform`
+- **Project root:** `stacks/spacelift`
+- **Branch:** `main`
+- **Tool:** OpenTofu
+- **Administrative:** enabled (required to create and manage other stacks)
+- **Autodeploy:** enabled
 
-   > **Future:** Add a Spacelift plan policy to require management approval when changes
-   > exceed a defined risk threshold (e.g. any resource destructions, or more than N
-   > resources changing). This gates high-impact applies without blocking routine changes.
+### 2b — Set the required environment variable
 
-1. Once applied, Spacelift manages all subsequent runs. Merges to `main` trigger
-   apply runs in dependency order automatically.
+In the management stack's **Environment** tab, add:
 
-> **Note:** Until this step is complete, the `plan` CI workflow will succeed for
-> `network` (no dependencies) but dependent stacks (`eks`, `argo-cd`, `prometheus`)
-> will fail to plan due to missing cross-stack outputs.
+| Name | Value | Secret |
+| --- | --- | --- |
+| `TF_VAR_repository` | `argocd-eks-terraform` | No |
+
+### 2c — Add bootstrap AWS credentials (first run only)
+
+The management stack must create an IAM role (`spacelift-integration`) on its first apply so all app stacks have AWS credentials. Set them on the **management stack only** — app stacks (`network-dev`, `eks-dev`, etc.) get credentials automatically via the integration once it is created.
+
+```sh
+spacectl stack environment setvar \
+  -id argocd-eks-terraform \
+  --write-only \
+  AWS_ACCESS_KEY_ID \
+  "$(aws configure get aws_access_key_id)"
+
+spacectl stack environment setvar \
+  -id argocd-eks-terraform \
+  --write-only \
+  AWS_SECRET_ACCESS_KEY \
+  "$(aws configure get aws_secret_access_key)"
+```
+
+The `$(aws configure get ...)` subshells pull values from your local `~/.aws/credentials`. If you use a named profile, prefix with `AWS_PROFILE=<profile>`. To use a temporary IAM user instead, replace the subshells with the literal key values.
+
+> These are removed after the first successful apply — see step 2d.
+
+### 2d — Trigger the first run
+
+Trigger the management stack from the UI. On success it creates:
+
+- All app stacks: `iam`, `network-dev/prod`, `eks-dev/prod`, `eks-addons-dev/prod`, `argo-cd-dev/prod`, `prometheus-dev/prod`
+- The `spacelift-integration` IAM role in AWS (assumed by all Spacelift runs)
+- Stack dependencies, cross-stack output references, and plan/approval policies
+
+**After the run completes:** remove the bootstrap credentials — they are no longer needed:
+
+```sh
+spacectl stack environment delete \
+  -id argocd-eks-terraform \
+  AWS_ACCESS_KEY_ID
+
+spacectl stack environment delete \
+  -id argocd-eks-terraform \
+  AWS_SECRET_ACCESS_KEY
+```
+
+### 2e — Apply the IAM stack and set AWS_ROLE_ARN
+
+The `iam` stack creates the GitHub Actions OIDC provider and read-only plan role used by CI. Trigger it from the Spacelift UI, then set the output as a GitHub secret:
+
+```sh
+gh secret set AWS_ROLE_ARN --body "<role-arn-from-iam-stack-outputs>"
+```
+
+The role ARN is visible in the `iam` stack's **Outputs** tab in Spacelift after it applies.
 
 ---
 
-## Step 4: Ongoing — Spacelift Manages Everything
+## Step 3: Ongoing — Spacelift Manages Everything
 
 After bootstrapping, the workflow is:
 
@@ -80,7 +102,8 @@ After bootstrapping, the workflow is:
 - **Merge to `main`** → Spacelift triggers `tofu apply` runs per environment in dependency order:
   1. `network-{dev,prod}`
   2. `eks-{dev,prod}` (after network)
-  3. `argo-cd-{dev,prod}` and `prometheus-{dev,prod}` (after eks, in parallel)
+  3. `eks-addons-{dev,prod}` (after eks)
+  4. `argo-cd-{dev,prod}` and `prometheus-{dev,prod}` (after eks-addons, in parallel)
 
 Dev stacks apply automatically. Prod stacks wait for approval before applying (see [Spacelift: Production Approval Workflow](spacelift.md#production-approval-workflow)).
 
@@ -93,7 +116,7 @@ into dependent stacks automatically — no manual variable passing required.
 
 | Secret | Description |
 | --- | --- |
-| `AWS_ROLE_ARN` | IAM role ARN output from `stacks/iam` — see [Step 1](#step-1-apply-the-iam-stack) |
+| `AWS_ROLE_ARN` | IAM role ARN output from `stacks/iam` — see [Step 2e](#2e--apply-the-iam-stack-and-set-aws_role_arn) |
 | `SPACELIFT_API_KEY_ID` | Spacelift API key ID for spacectl |
 | `SPACELIFT_API_KEY_SECRET` | Spacelift API key secret for spacectl |
 

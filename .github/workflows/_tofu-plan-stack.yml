@@ -73,26 +73,22 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ inputs.aws_region || 'us-east-1' }}
 
-      # Inject per-environment config variables as TF_VAR_* so no tfvars files are
-      # needed in each stack directory. Values mirror the defaults in
-      # stacks/spacelift/variables.tf. OpenTofu silently ignores any TF_VAR_*
+      # Cross-stack stub variables for CI plans. Static per-environment config
+      # is provided via -var-file (stacks/<name>/<env>.tfvars). These stubs
+      # cover dynamic cross-stack inputs (vpc_id, subnet_ids, cluster endpoint,
+      # etc.) that only exist after upstream stacks have been applied. They are
+      # not set in tfvars so that Spacelift's native TF_VAR_* cross-stack
+      # injection can override them on real applies without being blocked by a
+      # higher-precedence -var-file entry. OpenTofu silently ignores TF_VAR_*
       # that do not match a declared variable in the target stack.
-      - name: Inject per-environment variables
+      - name: Inject cross-stack stub variables
+        if: inputs.environment != ''
         run: |
           set -euo pipefail
           if [[ "${{ inputs.environment }}" == "dev" ]]; then
             {
-              echo "TF_VAR_environment=dev"
-              echo "TF_VAR_cluster_name=argocd-dev"
-              echo "TF_VAR_vpc_cidr=10.0.0.0/16"
-              echo 'TF_VAR_public_subnets=["10.0.1.0/24","10.0.2.0/24"]'
-              echo 'TF_VAR_private_subnets=["10.0.3.0/24","10.0.4.0/24"]'
-              echo "TF_VAR_vpc_cidr_block=10.0.0.0/16"
-              echo 'TF_VAR_public_access_cidrs=["0.0.0.0/0"]'
-              # Cross-stack stubs — overwritten by Fetch cross-stack outputs once
-              # Spacelift is bootstrapped. OpenTofu ignores vars with no matching
-              # variable declaration in the target stack.
               echo "TF_VAR_vpc_id=vpc-00000000000000000"
+              echo "TF_VAR_vpc_cidr_block=10.0.0.0/16"
               echo 'TF_VAR_subnet_ids=["subnet-00000000000000000","subnet-11111111111111111"]'
               echo "TF_VAR_eks_cluster_name=argocd-dev"
               echo "TF_VAR_eks_cluster_endpoint=https://stub.gr7.us-east-1.eks.amazonaws.com"
@@ -101,17 +97,8 @@ jobs:
             } >> "$GITHUB_ENV"
           elif [[ "${{ inputs.environment }}" == "prod" ]]; then
             {
-              echo "TF_VAR_environment=prod"
-              echo "TF_VAR_cluster_name=argocd-prod"
-              echo "TF_VAR_vpc_cidr=10.1.0.0/16"
-              echo 'TF_VAR_public_subnets=["10.1.1.0/24","10.1.2.0/24"]'
-              echo 'TF_VAR_private_subnets=["10.1.3.0/24","10.1.4.0/24"]'
-              echo "TF_VAR_vpc_cidr_block=10.1.0.0/16"
-              echo 'TF_VAR_public_access_cidrs=["0.0.0.0/0"]'
-              # Cross-stack stubs — overwritten by Fetch cross-stack outputs once
-              # Spacelift is bootstrapped. OpenTofu ignores vars with no matching
-              # variable declaration in the target stack.
               echo "TF_VAR_vpc_id=vpc-11111111111111111"
+              echo "TF_VAR_vpc_cidr_block=10.1.0.0/16"
               echo 'TF_VAR_subnet_ids=["subnet-22222222222222222","subnet-33333333333333333"]'
               echo "TF_VAR_eks_cluster_name=argocd-prod"
               echo "TF_VAR_eks_cluster_endpoint=https://stub.gr7.us-east-1.eks.amazonaws.com"
@@ -144,25 +131,26 @@ jobs:
             echo "Stack '${{ inputs.spacelift_dep_stack }}' not found in Spacelift — cross-stack outputs unavailable. Plan will use stub values."
             exit 0
           }
+          # Only write a value to GITHUB_ENV when it is non-empty so that the
+          # stub values set by "Inject per-environment variables" are preserved
+          # when the upstream Spacelift stack exists but has no outputs yet.
+          write_if_set() {
+            local key="$1" val="$2"
+            if [[ -n "$val" ]]; then echo "${key}=${val}" >> "$GITHUB_ENV"; fi
+          }
           if [[ "${{ inputs.stack_name }}" == "eks" ]]; then
-            {
-              echo "TF_VAR_vpc_id=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_id") | .value')"
-              echo "TF_VAR_subnet_ids=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="private_subnet_ids") | .value')"
-              echo "TF_VAR_vpc_cidr_block=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_cidr_block") | .value')"
-            } >> "$GITHUB_ENV"
+            write_if_set TF_VAR_vpc_id        "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_id") | .value')"
+            write_if_set TF_VAR_subnet_ids    "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="private_subnet_ids") | .value')"
+            write_if_set TF_VAR_vpc_cidr_block "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="vpc_cidr_block") | .value')"
           elif [[ "${{ inputs.stack_name }}" == "eks-addons" ]]; then
-            {
-              echo "TF_VAR_eks_cluster_name=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
-              echo "TF_VAR_eks_cluster_endpoint=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
-              echo "TF_VAR_cluster_ca_certificate=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
-              echo "TF_VAR_aws_lb_controller_role_arn=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="aws_lb_controller_role_arn") | .value')"
-            } >> "$GITHUB_ENV"
+            write_if_set TF_VAR_eks_cluster_name        "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
+            write_if_set TF_VAR_eks_cluster_endpoint    "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
+            write_if_set TF_VAR_cluster_ca_certificate  "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
+            write_if_set TF_VAR_aws_lb_controller_role_arn "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="aws_lb_controller_role_arn") | .value')"
           elif [[ "${{ inputs.stack_name }}" == "argo-cd" || "${{ inputs.stack_name }}" == "prometheus" ]]; then
-            {
-              echo "TF_VAR_eks_cluster_name=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
-              echo "TF_VAR_eks_cluster_endpoint=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
-              echo "TF_VAR_cluster_ca_certificate=$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
-            } >> "$GITHUB_ENV"
+            write_if_set TF_VAR_eks_cluster_name       "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
+            write_if_set TF_VAR_eks_cluster_endpoint   "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
+            write_if_set TF_VAR_cluster_ca_certificate "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
           fi
 
       # -backend=false skips remote state initialisation — GitHub Actions does
@@ -174,7 +162,12 @@ jobs:
       - name: Plan
         run: |
           set -euo pipefail
+          VAR_FILE_ARG=""
+          if [[ -n "${{ inputs.environment }}" ]]; then
+            VAR_FILE_ARG="-var-file=${{ inputs.environment }}.tfvars"
+          fi
           tofu -chdir=stacks/${{ inputs.stack_name }} plan \
+            ${VAR_FILE_ARG} \
             -input=false \
             -no-color 2>&1 | tee /tmp/${{ inputs.stack_name }}-plan.txt
 

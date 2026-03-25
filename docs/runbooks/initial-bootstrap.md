@@ -16,10 +16,10 @@ First-time deployment of all stacks from zero AWS resources to a fully running d
 **Dependency order:**
 
 ```text
-IAM (manual, once per AWS account)
-  └─► Spacelift bootstrap (manual, UI)
-        └─► network-dev → eks-dev → argo-cd-dev + prometheus-dev
-        └─► network-prod → eks-prod → argo-cd-prod + prometheus-prod  (after dev stable)
+Spacelift management stack (manual, UI)
+  └─► iam (Spacelift triggers)
+  └─► network-dev → eks-dev → eks-addons-dev → argo-cd-dev + prometheus-dev
+  └─► network-prod → eks-prod → eks-addons-prod → argo-cd-prod + prometheus-prod  (after dev stable)
 ```
 
 ---
@@ -28,14 +28,16 @@ IAM (manual, once per AWS account)
 
 Complete all of the following before starting. Do not proceed if any item is unresolved.
 
-- [ ] AWS credentials active with sufficient permissions (AdministratorAccess for bootstrap)
+- [ ] AWS credentials active with AdministratorAccess (for the one-time management stack bootstrap)
 - [ ] Spacelift account provisioned and accessible
 - [ ] `tofu` installed locally (`tofu version` — expect `~> 1.10`)
 - [ ] `spacectl` installed and authenticated: `spacectl whoami`
 - [ ] `opa` installed (for policy checks): `opa version`
-- [ ] GitHub secrets configured: `AWS_ROLE_ARN`, `SPACELIFT_API_KEY_ID`, `SPACELIFT_API_KEY_SECRET`
+- [ ] GitHub secrets configured: `SPACELIFT_API_KEY_ID`, `SPACELIFT_API_KEY_SECRET`
 - [ ] GitHub variables configured: `AWS_REGION`, `SPACELIFT_API_URL`
 - [ ] All CI checks green on the target branch before merging to `main`
+
+> `AWS_ROLE_ARN` is set after the `iam` stack applies — not a pre-req.
 
 ---
 
@@ -64,56 +66,87 @@ make lint
 
 ---
 
-## Phase 1 — IAM Stack (once per AWS account)
+## Phase 1 — Spacelift Management Stack Bootstrap
 
-The IAM stack creates the GitHub Actions OIDC provider and a read-only plan role. It is applied manually and lives outside Spacelift.
+The Spacelift management stack manages all other stacks as code. It must be created manually once, then it provisions everything else.
 
-```bash
-cd stacks/iam
-tofu init
-tofu plan \
-  -var="github_org=<your-github-user-or-org>" \
-  -var="github_repo=argocd-eks-terraform"
+### 1a — Create the management stack in the Spacelift UI
+
+**New stack** with these settings:
+
+| Field | Value |
+| --- | --- |
+| Repository | `argocd-eks-terraform` |
+| Project root | `stacks/spacelift` |
+| Branch | `main` |
+| Tool | OpenTofu |
+| Administrative | **enabled** |
+| Autodeploy | **enabled** |
+
+### 1b — Set required environment variables
+
+Set the repository name (permanent) and bootstrap AWS credentials (first run only) on the **management stack only**. App stacks get AWS credentials automatically via the integration once it is created.
+
+```sh
+spacectl stack environment setvar \
+  -id argocd-eks-terraform \
+  TF_VAR_repository \
+  argocd-eks-terraform
+
+spacectl stack environment setvar \
+  -id argocd-eks-terraform \
+  --write-only \
+  AWS_ACCESS_KEY_ID \
+  "$(aws configure get aws_access_key_id)"
+
+spacectl stack environment setvar \
+  -id argocd-eks-terraform \
+  --write-only \
+  AWS_SECRET_ACCESS_KEY \
+  "$(aws configure get aws_secret_access_key)"
 ```
 
-Review the plan. Expect: ~3 resources (OIDC provider, IAM role, policy attachment).
+The `$(aws configure get ...)` subshells pull values from your local `~/.aws/credentials`. Prefix with `AWS_PROFILE=<profile>` if you use a named profile.
 
-```bash
-tofu apply \
-  -var="github_org=<your-github-user-or-org>" \
-  -var="github_repo=argocd-eks-terraform"
+### 1c — Trigger the run
 
-# Store the role ARN as a GitHub secret
-gh secret set AWS_ROLE_ARN --body "$(tofu output -raw github_actions_plan_role_arn)"
+Trigger an apply from the Spacelift UI. Expect `+N` delta (stacks, environment variables, dependencies, policies, IAM role, AWS integration).
+
+On success it creates:
+
+- All app stacks: `iam`, `network-dev/prod`, `eks-dev/prod`, `eks-addons-dev/prod`, `argo-cd-dev/prod`, `prometheus-dev/prod`
+- The `spacelift-integration` IAM role (cross-account role assumed by all Spacelift runs)
+- Stack dependencies, cross-stack output references, and plan/approval policies
+
+**After the run:** remove the bootstrap credentials — they are no longer needed:
+
+```sh
+spacectl stack environment delete -id argocd-eks-terraform AWS_ACCESS_KEY_ID
+spacectl stack environment delete -id argocd-eks-terraform AWS_SECRET_ACCESS_KEY
 ```
+
+**Validation:**
+
+In the Spacelift UI, confirm all stacks are created and show `NONE` state (never run).
+
+---
+
+## Phase 2 — IAM Stack
+
+The `iam` stack creates the GitHub Actions OIDC provider and read-only plan role used by CI. Trigger it from the Spacelift UI.
 
 **Validation:**
 
 ```bash
 aws iam get-role --role-name github-actions-plan
-# Expect: role returned with AssumeRolePolicyDocument referencing token.actions.githubusercontent.com
+# Expect: role with AssumeRolePolicyDocument referencing token.actions.githubusercontent.com
 ```
 
----
+Store the role ARN as a GitHub secret. The ARN is in the `iam` stack's **Outputs** tab in Spacelift:
 
-## Phase 2 — Spacelift Bootstrap (manual, UI)
-
-The Spacelift management stack must be created manually once in the Spacelift UI. It then manages all other stacks as code.
-
-1. In the Spacelift UI: **New stack**
-   - Repository: `argocd-eks-terraform`
-   - Project root: `stacks/spacelift`
-   - Branch: `main`
-   - Tool: OpenTofu
-   - Autodeploy: **enabled**
-
-2. Trigger an apply from the Spacelift UI.
-
-   This creates all app stacks: `iam`, `network-dev`, `network-prod`, `eks-dev`, `eks-prod`, `argo-cd-dev`, `argo-cd-prod`, `prometheus-dev`, `prometheus-prod` and wires their dependencies.
-
-**Validation:**
-
-In the Spacelift UI, confirm all stacks are created and show `Inactive` (ready to run, not yet applied).
+```bash
+gh secret set AWS_ROLE_ARN --body "<role-arn-from-iam-stack-outputs>"
+```
 
 ---
 
@@ -221,20 +254,23 @@ Prod stacks do not autodeploy. Each requires a manual approval in the Spacelift 
 Destroy in reverse dependency order:
 
 ```bash
-# Via Spacelift (preferred)
-spacectl stack run trigger --id prometheus-dev
-spacectl stack run trigger --id argo-cd-dev
-spacectl stack run trigger --id eks-dev
-spacectl stack run trigger --id network-dev
+# Via Spacelift Tasks (preferred) — reverse dependency order
+# Trigger a destroy task on each stack in sequence
+spacectl stack task --id prometheus-dev    -- tofu destroy -auto-approve
+spacectl stack task --id argo-cd-dev      -- tofu destroy -auto-approve
+spacectl stack task --id eks-addons-dev   -- tofu destroy -auto-approve
+spacectl stack task --id eks-dev          -- tofu destroy -auto-approve
+spacectl stack task --id network-dev      -- tofu destroy -auto-approve
 ```
 
-Or directly with OpenTofu:
+Or directly with OpenTofu (requires local state):
 
 ```bash
-cd stacks/prometheus && tofu destroy
-cd stacks/argo-cd    && tofu destroy
-cd stacks/eks        && tofu destroy
-cd stacks/network    && tofu destroy
+cd stacks/prometheus  && tofu destroy
+cd stacks/argo-cd     && tofu destroy
+cd stacks/eks-addons  && tofu destroy
+cd stacks/eks         && tofu destroy
+cd stacks/network     && tofu destroy
 ```
 
 > **Note:** EKS cluster deletion takes ~10 minutes. KMS keys have a 7-day deletion window after `tofu destroy` — this is by design and cannot be shortened.

@@ -61,12 +61,20 @@ In a single-operator setup, lower the threshold in
 
 ---
 
+## AWS Integration Bootstrap
+
+The management stack creates a `spacelift-integration` IAM role in AWS on its first apply. All app stacks assume this role via the `spacelift_aws_integration` resource — no long-lived credentials are stored anywhere after bootstrap.
+
+For the first run only, the management stack needs static AWS credentials set in its **Environment** tab so it can create the role. See [Bootstrap: Step 2c](bootstrap.md#2c--add-bootstrap-aws-credentials-first-run-only) for the full procedure. Once the role exists, remove the static credentials.
+
+---
+
 ## Create an API Key
 
 1. In the Spacelift UI, go to **Settings → API keys → Create API key**
 2. Give it a name (e.g. `github-actions`) and assign the **Read** role (plan workflows only need read access)
 3. Copy the key ID and secret — the secret is shown once only
-4. Store them as GitHub secrets (see [Bootstrap: Step 2](bootstrap.md#step-2-configure-github-secrets-and-variables))
+4. Store them as GitHub secrets (see [Bootstrap: Step 1](bootstrap.md#step-1-configure-github-secrets-and-variables))
 
 ## Authenticate spacectl
 
