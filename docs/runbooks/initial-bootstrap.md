@@ -7,7 +7,7 @@ First-time deployment of all stacks from zero AWS resources to a fully running d
 ## Overview
 
 | | |
-|-|-|
+| - | - |
 | **Scope** | dev environment first; prod after dev is stable for 24 hours |
 | **Risk** | Medium — greenfield deploy, no existing state to preserve |
 | **Rollback time** | ~45 min (`tofu destroy` in reverse dependency order) |
@@ -83,46 +83,35 @@ The Spacelift management stack manages all other stacks as code. It must be crea
 | Administrative | **enabled** |
 | Autodeploy | **enabled** |
 
-### 1b — Set required environment variables
+### 1b — Run the first apply locally
 
-Set the repository name (permanent) and bootstrap AWS credentials (first run only) on the **management stack only**. App stacks get AWS credentials automatically via the integration once it is created.
+Running locally avoids IAM propagation race conditions that occur when the apply runs inside Spacelift for the first time. Your local AWS credentials must have `AdministratorAccess`.
 
 ```sh
-spacectl stack environment setvar \
-  -id argocd-eks-terraform \
-  TF_VAR_repository \
-  argocd-eks-terraform
+export SPACELIFT_API_KEY_ENDPOINT=https://<org>.app.spacelift.io
+export SPACELIFT_API_KEY_ID=<key-id>
+export SPACELIFT_API_KEY_SECRET=<key-secret>
 
-spacectl stack environment setvar \
-  -id argocd-eks-terraform \
-  --write-only \
-  AWS_ACCESS_KEY_ID \
-  "$(aws configure get aws_access_key_id)"
-
-spacectl stack environment setvar \
-  -id argocd-eks-terraform \
-  --write-only \
-  AWS_SECRET_ACCESS_KEY \
-  "$(aws configure get aws_secret_access_key)"
+cd stacks/spacelift
+tofu init
+tofu apply -var="repository=argocd-eks-terraform"
 ```
 
-The `$(aws configure get ...)` subshells pull values from your local `~/.aws/credentials`. Prefix with `AWS_PROFILE=<profile>` if you use a named profile.
+Expect `+N` delta — stacks, environment variables, dependencies, policies, IAM role, and AWS integration attachments are all created in one apply.
 
-### 1c — Trigger the run
+On success:
 
-Trigger an apply from the Spacelift UI. Expect `+N` delta (stacks, environment variables, dependencies, policies, IAM role, AWS integration).
+- All app stacks exist in Spacelift: `iam`, `network-dev/prod`, `eks-dev/prod`, `eks-addons-dev/prod`, `argo-cd-dev/prod`, `prometheus-dev/prod`
+- The `spacelift-integration` IAM role exists in AWS (assumed by all Spacelift runs)
+- Stack dependencies, cross-stack output references, and plan/approval policies are in place
 
-On success it creates:
+### 1c — Upload state to Spacelift
 
-- All app stacks: `iam`, `network-dev/prod`, `eks-dev/prod`, `eks-addons-dev/prod`, `argo-cd-dev/prod`, `prometheus-dev/prod`
-- The `spacelift-integration` IAM role (cross-account role assumed by all Spacelift runs)
-- Stack dependencies, cross-stack output references, and plan/approval policies
-
-**After the run:** remove the bootstrap credentials — they are no longer needed:
+Upload the local state file so subsequent Spacelift runs are consistent with what was applied:
 
 ```sh
-spacectl stack environment delete -id argocd-eks-terraform AWS_ACCESS_KEY_ID
-spacectl stack environment delete -id argocd-eks-terraform AWS_SECRET_ACCESS_KEY
+spacectl stack state upload -id argocd-eks-terraform < terraform.tfstate
+rm terraform.tfstate terraform.tfstate.backup
 ```
 
 **Validation:**
@@ -158,7 +147,7 @@ gh secret set AWS_ROLE_ARN --body "<role-arn-from-iam-stack-outputs>"
 **Expected run sequence:**
 
 | Stack | Depends on | Expected duration |
-|-------|-----------|------------------|
+| ----- | --------- | ---------------- |
 | `network-dev` | — | ~3 min |
 | `eks-dev` | `network-dev` finished | ~15–20 min |
 | `eks-addons-dev` | `eks-dev` finished | ~3 min |
@@ -231,7 +220,7 @@ Prod stacks do not autodeploy. Each requires a manual approval in the Spacelift 
 ## Verification Signals
 
 | Timeframe | Signal | Where to check |
-|-----------|--------|---------------|
+| --------- | ------ | ------------- |
 | 0–3 min | `network-dev` stack `Finished` | Spacelift UI |
 | 3–25 min | `eks-dev` stack `Finished`, nodes `Ready` | Spacelift UI + `kubectl get nodes` |
 | 25–28 min | `eks-addons-dev` stack `Finished`, ALB controller pod `Running` | Spacelift UI + `kubectl get pods -n kube-system` |

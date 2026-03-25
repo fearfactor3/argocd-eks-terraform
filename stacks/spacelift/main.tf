@@ -1,11 +1,22 @@
-# Bootstrap note: Create this management stack manually in the Spacelift UI
-# (project_root = stacks/spacelift), then apply once to provision the app stacks.
+# Bootstrap note: see docs/bootstrap.md for the full first-time setup procedure.
 #
-# First-run bootstrap: the management stack needs static AWS credentials on its
-# first apply so it can create the spacelift-integration IAM role. Set
-# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN in the
-# management stack's Environment tab, trigger the run, then remove them — all
-# subsequent runs use the spacelift_aws_integration_attachment below.
+# Summary: create this stack manually in the Spacelift UI (project_root =
+# stacks/spacelift, Administrative = enabled), then run the first apply locally:
+#
+#   export SPACELIFT_API_KEY_ENDPOINT=https://<org>.app.spacelift.io
+#   export SPACELIFT_API_KEY_ID=<key-id>
+#   export SPACELIFT_API_KEY_SECRET=<key-secret>
+#
+#   cd stacks/spacelift
+#   tofu init
+#   tofu apply -var="repository=argocd-eks-terraform"
+#
+# Upload the resulting state to Spacelift so subsequent runs are consistent:
+#
+#   spacectl stack state upload -id argocd-eks-terraform < terraform.tfstate
+#   rm terraform.tfstate terraform.tfstate.backup
+#
+# All subsequent runs are driven by Spacelift on merge to main.
 
 data "aws_caller_identity" "current" {}
 
@@ -39,6 +50,13 @@ resource "aws_iam_role_policy_attachment" "spacelift_integration" {
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
 
+# IAM is eventually consistent — wait for the role and policy to propagate
+# globally before Spacelift attempts to assume the role during attachment.
+resource "time_sleep" "iam_propagation" {
+  create_duration = "30s"
+  depends_on      = [aws_iam_role_policy_attachment.spacelift_integration]
+}
+
 # Attach the integration to every app stack so they receive AWS credentials.
 resource "spacelift_aws_integration_attachment" "env" {
   for_each       = local.env_stacks
@@ -49,7 +67,7 @@ resource "spacelift_aws_integration_attachment" "env" {
 
   # Spacelift validates the trust relationship at attachment time, so the IAM
   # role and its policy must exist before any attachment is attempted.
-  depends_on = [aws_iam_role_policy_attachment.spacelift_integration]
+  depends_on = [time_sleep.iam_propagation]
 }
 
 resource "spacelift_aws_integration_attachment" "iam" {
@@ -58,7 +76,7 @@ resource "spacelift_aws_integration_attachment" "iam" {
   read           = true
   write          = true
 
-  depends_on = [aws_iam_role_policy_attachment.spacelift_integration]
+  depends_on = [time_sleep.iam_propagation]
 }
 
 locals {

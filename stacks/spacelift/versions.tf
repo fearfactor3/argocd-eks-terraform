@@ -8,6 +8,10 @@ terraform {
       source  = "spacelift-io/spacelift"
       version = "~> 1.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.13"
+    }
   }
   required_version = "~> 1.10"
 }
