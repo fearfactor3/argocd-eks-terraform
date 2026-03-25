@@ -79,7 +79,7 @@ Note: `tofu init` succeeds without these variables — only `plan` and `apply` r
 
 **Fix A:** The `time_sleep.iam_propagation` resource (30s delay) handles this for new runs. If it fails on the first run, trigger a re-run — subsequent runs skip the sleep (role already exists) but the trust relationship is now visible.
 
-**Cause B:** The IAM role's trust policy was created with an empty `ExternalId`. This happens when `spacelift_aws_integration.this.external_id` was not yet populated when the role was first created.
+**Cause B:** The IAM role's trust policy was created with an empty `ExternalId`. This can happen if the role was tainted and recreated from a cached state before `spacelift_aws_integration.this.external_id` was populated, or if running against stale code.
 
 **Diagnosis:**
 
@@ -88,23 +88,33 @@ aws iam get-role --role-name spacelift-integration \
   --query 'Role.AssumeRolePolicyDocument' \
   --output json
 # Look for "sts:ExternalId": "" — empty string confirms this cause
+# Or check that the Principal uses the correct aws_account_id (not a hardcoded value)
 ```
 
-**Fix B:** The `ExternalId` condition has been removed from the trust policy. The Spacelift provider does not reliably populate `external_id` and the account-scoped principal (`arn:aws:iam::324880187172:root`) is sufficient when you control the entire Spacelift account. No confused deputy risk exists in a single-tenant setup.
+**Fix B:** The trust policy must include both the correct Spacelift AWS account ID and the ExternalId that Spacelift validates during attachment. The current code derives both from `spacelift_aws_integration.this` (which is created before the IAM role, so `external_id` and `aws_account_id` are always populated).
 
-If you hit this on an older version of the code that still has the condition, patch the role directly:
+If the role is in a bad state, patch it directly using the values from the live integration:
 
 ```sh
+# Get the correct values from the Spacelift integration resource
+EXTERNAL_ID=$(tofu -chdir=stacks/spacelift output -raw spacelift_external_id 2>/dev/null)
+AWS_ACCOUNT_ID=$(tofu -chdir=stacks/spacelift output -raw spacelift_aws_account_id 2>/dev/null)
+
+# Or read them from the Spacelift provider state via spacectl / Spacelift UI
+# Then patch the role:
 aws iam update-assume-role-policy \
   --role-name spacelift-integration \
-  --policy-document '{
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Principal": { "AWS": "arn:aws:iam::324880187172:root" },
-      "Action": "sts:AssumeRole"
+  --policy-document "{
+    \"Version\": \"2012-10-17\",
+    \"Statement\": [{
+      \"Effect\": \"Allow\",
+      \"Principal\": { \"AWS\": \"arn:aws:iam::${AWS_ACCOUNT_ID}:root\" },
+      \"Action\": \"sts:AssumeRole\",
+      \"Condition\": {
+        \"StringEquals\": { \"sts:ExternalId\": \"${EXTERNAL_ID}\" }
+      }
     }]
-  }'
+  }"
 ```
 
 Then trigger a new run.
