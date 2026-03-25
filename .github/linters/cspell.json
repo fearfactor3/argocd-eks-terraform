@@ -119,7 +119,8 @@
     "underutilization",
     "misconfigs",
     "pss",
-    "setvar"
+    "setvar",
+    "fearfactor"
   ],
   "ignoreWords": [],
   "overrides": [
