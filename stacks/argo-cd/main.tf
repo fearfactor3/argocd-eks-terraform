@@ -44,23 +44,21 @@ locals {
 }
 
 # Namespace is managed explicitly so Pod Security Standard labels are in place
-# before Helm schedules any pods. enforce=baseline blocks the most dangerous
-# behaviours (host networking, privileged containers, host path mounts).
-# pss_restricted_warn=true (prod) additionally adds warn/audit=restricted labels
-# that surface hardening gaps in audit logs without blocking pods.
-# pss_restricted_warn=false (dev) omits those labels to avoid noise during
-# experimentation. Helm's create_namespace is disabled so upgrades cannot
-# overwrite the labels.
+# before Helm schedules any pods. ArgoCD components run as non-root with
+# dropped capabilities — enforce=restricted is applied unconditionally.
+# warn/audit=restricted surface any future regressions introduced by chart
+# upgrades. Helm's create_namespace is disabled so upgrades cannot overwrite
+# the labels.
 resource "kubernetes_namespace_v1" "argocd" {
   metadata {
     name = "argocd"
-    labels = merge(
-      { "pod-security.kubernetes.io/enforce" = "baseline" },
-      var.pss_restricted_warn ? {
-        "pod-security.kubernetes.io/warn"  = "restricted"
-        "pod-security.kubernetes.io/audit" = "restricted"
-      } : {}
-    )
+    labels = {
+      # ArgoCD components run as non-root with dropped capabilities — restricted
+      # PSS is enforced unconditionally. warn/audit surface any future regressions.
+      "pod-security.kubernetes.io/enforce" = "restricted"
+      "pod-security.kubernetes.io/warn"    = "restricted"
+      "pod-security.kubernetes.io/audit"   = "restricted"
+    }
   }
 }
 
@@ -82,6 +80,14 @@ module "argo_cd" {
       commonLabels = {
         environment = var.environment
       }
+      # Pod-level security context required for restricted PSS.
+      # seccompProfile is not set by the chart by default in all versions.
+      securityContext = {
+        runAsNonRoot = true
+        seccompProfile = {
+          type = "RuntimeDefault"
+        }
+      }
     }
     server = {
       service = {
@@ -93,31 +99,57 @@ module "argo_cd" {
       # (small) and prod (standard) can be sized appropriately. See locals
       # at the top of this file for preset values.
       resources = local.resources.server
+      containerSecurityContext = {
+        allowPrivilegeEscalation = false
+        capabilities             = { drop = ["ALL"] }
+        readOnlyRootFilesystem   = false
+      }
       ingress = {
         enabled          = true
         ingressClassName = "alb"
-        annotations = {
-          # Route internet-facing traffic via the public subnets tagged
-          # kubernetes.io/role/elb = 1 by the network module.
-          "alb.ingress.kubernetes.io/scheme"      = "internet-facing"
-          "alb.ingress.kubernetes.io/target-type" = "ip"
-          # ArgoCD uses gRPC on the same port. GRPC backend-protocol enables
-          # HTTP/2 between the ALB and ArgoCD pods.
-          "alb.ingress.kubernetes.io/backend-protocol" = "GRPC"
-          "alb.ingress.kubernetes.io/listen-ports"     = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
-          "alb.ingress.kubernetes.io/ssl-redirect"     = "443"
-        }
+        annotations = merge(
+          {
+            # Route internet-facing traffic via the public subnets tagged
+            # kubernetes.io/role/elb = 1 by the network module.
+            "alb.ingress.kubernetes.io/scheme"      = "internet-facing"
+            "alb.ingress.kubernetes.io/target-type" = "ip"
+            # ArgoCD uses gRPC on the same port. GRPC backend-protocol enables
+            # HTTP/2 between the ALB and ArgoCD pods.
+            "alb.ingress.kubernetes.io/backend-protocol" = "GRPC"
+            "alb.ingress.kubernetes.io/listen-ports"     = jsonencode([{ HTTP = 80 }])
+          },
+          var.certificate_arn != "" ? {
+            "alb.ingress.kubernetes.io/certificate-arn" = var.certificate_arn
+            "alb.ingress.kubernetes.io/listen-ports"    = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
+            "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
+          } : {}
+        )
         hosts = ["argocd.${var.environment}.internal"]
       }
     }
     repoServer = {
       resources = local.resources.repoServer
+      containerSecurityContext = {
+        allowPrivilegeEscalation = false
+        capabilities             = { drop = ["ALL"] }
+        readOnlyRootFilesystem   = false
+      }
     }
     applicationSet = {
       resources = local.resources.applicationSet
+      containerSecurityContext = {
+        allowPrivilegeEscalation = false
+        capabilities             = { drop = ["ALL"] }
+        readOnlyRootFilesystem   = false
+      }
     }
     controller = {
       resources = local.resources.controller
+      containerSecurityContext = {
+        allowPrivilegeEscalation = false
+        capabilities             = { drop = ["ALL"] }
+        readOnlyRootFilesystem   = false
+      }
     }
   })]
 }

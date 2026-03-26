@@ -79,11 +79,10 @@ variable "environments" {
     prometheus_storage_size = string
     loki_storage_size       = string
 
-    # Pod Security Standards
-    # pss_restricted_warn adds warn/audit=restricted labels to argocd and
-    # prometheus namespaces. Useful in prod to surface hardening gaps without
-    # blocking pods; omit in dev to avoid noise during experimentation.
-    pss_restricted_warn = bool
+    # TLS — set to the ACM wildcard certificate ARN for the environment's
+    # domain once a Route 53 hosted zone and ACM certificate are provisioned.
+    # Leave empty ("") for HTTP-only (default homelab behaviour).
+    certificate_arn = string
   }))
   default = {
     dev = {
@@ -104,7 +103,7 @@ variable "environments" {
       argocd_source_repo      = "*"
       prometheus_storage_size = "10Gi"
       loki_storage_size       = "5Gi"
-      pss_restricted_warn     = false
+      certificate_arn         = ""
     }
     prod = {
       vpc_cidr                 = "10.1.0.0/16"
@@ -124,7 +123,7 @@ variable "environments" {
       argocd_source_repo      = "*"
       prometheus_storage_size = "50Gi"
       loki_storage_size       = "10Gi"
-      pss_restricted_warn     = true
+      certificate_arn         = ""
     }
   }
 }

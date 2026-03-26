@@ -4,11 +4,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - ".github/workflows/plan.yml"
-      - ".github/workflows/_tofu-plan-stack.yml"
-      - "stacks/**"
-      - "modules/**"
   workflow_dispatch:
 
 permissions:
@@ -25,7 +20,29 @@ concurrency:
 # it impossible to distinguish which environment failed.
 
 jobs:
+  detect-changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      has_tf: ${{ steps.changed-files.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Only run the full plan pipeline when Terraform files actually changed.
+      # Docs-only PRs skip all plan jobs so required checks pass without running tofu.
+      - name: Check for Terraform changes
+        id: changed-files
+        uses: tj-actions/changed-files@22103cc46bda19c2b464ffe86db46df6922fd323 # v47.0.5
+        with:
+          files: |
+            stacks/**
+            modules/**
+            .github/workflows/plan.yml
+            .github/workflows/_tofu-plan-stack.yml
+
   plan-network-dev:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_tf == 'true'
     uses: ./.github/workflows/_tofu-plan-stack.yml
     with:
       stack_name: network
@@ -34,6 +51,8 @@ jobs:
     secrets: inherit
 
   plan-network-prod:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_tf == 'true'
     uses: ./.github/workflows/_tofu-plan-stack.yml
     with:
       stack_name: network
@@ -123,6 +142,7 @@ jobs:
 
   plan-summary:
     needs:
+      - detect-changes
       - plan-network-dev
       - plan-network-prod
       - plan-eks-dev
@@ -153,7 +173,13 @@ jobs:
           PROMETHEUS_PROD:    ${{ needs.plan-prometheus-prod.result }}
         run: |
           set -euo pipefail
-          result_icon() { [[ "$1" == "success" ]] && echo "✅" || echo "❌"; }
+          result_icon() {
+            case "$1" in
+              success) echo "✅" ;;
+              skipped) echo "⏭️" ;;
+              *)        echo "❌" ;;
+            esac
+          }
           {
             echo "body<<COMMENT_EOF"
             echo "<!-- opentofu-plan-summary -->"
@@ -194,18 +220,19 @@ jobs:
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
 
+      # Gate fails only on explicit failure — skipped jobs (docs-only PRs) are allowed.
       - name: Enforce gate
         if: |
-          needs.plan-network-dev.result        != 'success' ||
-          needs.plan-network-prod.result       != 'success' ||
-          needs.plan-eks-dev.result            != 'success' ||
-          needs.plan-eks-prod.result           != 'success' ||
-          needs.plan-eks-addons-dev.result     != 'success' ||
-          needs.plan-eks-addons-prod.result    != 'success' ||
-          needs.plan-argo-cd-dev.result        != 'success' ||
-          needs.plan-argo-cd-prod.result       != 'success' ||
-          needs.plan-prometheus-dev.result     != 'success' ||
-          needs.plan-prometheus-prod.result    != 'success'
+          needs.plan-network-dev.result     == 'failure' ||
+          needs.plan-network-prod.result    == 'failure' ||
+          needs.plan-eks-dev.result         == 'failure' ||
+          needs.plan-eks-prod.result        == 'failure' ||
+          needs.plan-eks-addons-dev.result  == 'failure' ||
+          needs.plan-eks-addons-prod.result == 'failure' ||
+          needs.plan-argo-cd-dev.result     == 'failure' ||
+          needs.plan-argo-cd-prod.result    == 'failure' ||
+          needs.plan-prometheus-dev.result  == 'failure' ||
+          needs.plan-prometheus-prod.result == 'failure'
         run: |
           echo "network    dev:  ${{ needs.plan-network-dev.result }}"
           echo "network    prod: ${{ needs.plan-network-prod.result }}"

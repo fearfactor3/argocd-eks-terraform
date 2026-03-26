@@ -306,6 +306,6 @@ cd stacks/network     && tofu destroy
 
 - [ ] ADR-006 resolved and ArgoCD watching a real app repo
 - [ ] ADR-008 resolved — secrets management strategy in place
-- [ ] ADR-009 resolved — TLS on all external endpoints
-- [ ] NetworkPolicy resources deployed between namespaces (argocd, prometheus, kube-system)
+- [ ] ADR-009 resolved — TLS on all external endpoints (certificate_arn variable wired; pending domain + ACM cert)
+- [x] NetworkPolicy resources deployed between namespaces (argocd, prometheus, kube-system)
 - [ ] Staging environment added to `var.environments` and validated
