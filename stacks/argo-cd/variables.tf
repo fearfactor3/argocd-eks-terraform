@@ -43,10 +43,10 @@ variable "argocd_resource_profile" {
   }
 }
 
-variable "pss_restricted_warn" {
-  description = "When true, adds warn/audit=restricted Pod Security Standard labels to the argocd namespace. Surfaces hardening gaps without blocking pods. Disable in dev to reduce noise."
-  type        = bool
-  default     = false
+variable "certificate_arn" {
+  description = "ACM certificate ARN for ALB TLS termination. When set, the ALB uses HTTPS with SSL redirect. Leave empty (default) for HTTP-only — suitable for homelab until a domain is registered."
+  type        = string
+  default     = ""
 }
 
 # Cross-stack inputs from the eks stack (injected by Spacelift as TF_VAR_*)

@@ -1,20 +1,19 @@
 # Namespace is managed explicitly so Pod Security Standard labels are in place
-# before Helm schedules any pods. Prometheus components (node-exporter,
-# kube-state-metrics) run with elevated privileges so baseline is the
-# appropriate enforcement level. pss_restricted_warn=true (prod) adds
-# warn/audit=restricted labels that surface hardening gaps in audit logs
-# without blocking pods. pss_restricted_warn=false (dev) omits those labels
-# to avoid noise during experimentation.
+# before Helm schedules any pods. node-exporter requires hostNetwork/hostPID
+# so enforce=restricted would block it — baseline is the appropriate enforcement
+# level. warn/audit=restricted are applied unconditionally in all environments
+# so hardening gaps surface in audit logs without blocking pods.
 resource "kubernetes_namespace_v1" "prometheus" {
   metadata {
     name = "prometheus"
-    labels = merge(
-      { "pod-security.kubernetes.io/enforce" = "baseline" },
-      var.pss_restricted_warn ? {
-        "pod-security.kubernetes.io/warn"  = "restricted"
-        "pod-security.kubernetes.io/audit" = "restricted"
-      } : {}
-    )
+    labels = {
+      # node-exporter requires hostNetwork/hostPID so enforce=restricted would
+      # block it — keep baseline enforcement. warn/audit=restricted surfaces
+      # hardening gaps in all environments without blocking pods.
+      "pod-security.kubernetes.io/enforce" = "baseline"
+      "pod-security.kubernetes.io/warn"    = "restricted"
+      "pod-security.kubernetes.io/audit"   = "restricted"
+    }
   }
 }
 
@@ -92,12 +91,18 @@ module "prometheus" {
       ingress = {
         enabled          = true
         ingressClassName = "alb"
-        annotations = {
-          "alb.ingress.kubernetes.io/scheme"       = "internet-facing"
-          "alb.ingress.kubernetes.io/target-type"  = "ip"
-          "alb.ingress.kubernetes.io/listen-ports" = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
-          "alb.ingress.kubernetes.io/ssl-redirect" = "443"
-        }
+        annotations = merge(
+          {
+            "alb.ingress.kubernetes.io/scheme"       = "internet-facing"
+            "alb.ingress.kubernetes.io/target-type"  = "ip"
+            "alb.ingress.kubernetes.io/listen-ports" = jsonencode([{ HTTP = 80 }])
+          },
+          var.certificate_arn != "" ? {
+            "alb.ingress.kubernetes.io/certificate-arn" = var.certificate_arn
+            "alb.ingress.kubernetes.io/listen-ports"    = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
+            "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
+          } : {}
+        )
         hosts = ["grafana.${var.environment}.internal"]
       }
       persistence = {

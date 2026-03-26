@@ -17,3 +17,11 @@ AVD-AWS-0164
 # by default. A customer-managed KMS CMK would add $1/key/month per environment with
 # no material security benefit for this test environment — logs are not PII/PCI-scoped.
 AVD-AWS-0017
+
+# NetworkPolicy egress to 0.0.0.0/0 is intentional in three policies:
+#   - argocd/allow-https-egress: kube-apiserver + Git remotes (variable IPs, port 443 only)
+#   - prometheus/allow-https-egress: kube-apiserver + CloudWatch (variable IPs, port 443 only)
+#   - prometheus/allow-node-scrape-egress: node-exporter (hostNetwork, node IPs vary, ports 9100/10250 only)
+# Port-scoped egress limits blast radius; full CIDR restriction is not feasible
+# because target IPs are assigned dynamically by AWS and cannot be enumerated at authoring time.
+KUBE-0002

@@ -1,6 +1,6 @@
 # ADR-009: TLS Termination and Certificate Management
 
-**Status**: Open — decision pending
+**Status**: Accepted — Option A (ALB + ACM). `certificate_arn` variable wired into `argo-cd` and `prometheus` stacks. TLS activates when a cert ARN is provided; HTTP-only when empty (default for homelab). Pending: Route 53 hosted zone and ACM certificate provisioning once a domain is registered.
 
 ---
 
@@ -11,7 +11,7 @@ ArgoCD and Grafana are currently exposed over plaintext HTTP via ALB Ingress (se
 TLS for Kubernetes services can be handled at several layers:
 
 | Layer | Approach |
-|-------|----------|
+| ----- | -------- |
 | **Ingress (L7)** | ALB Ingress Controller terminates TLS with an ACM certificate. Workloads see plaintext internally. |
 | **NLB with ACM (L4)** | NLB passes TLS to the pod; ACM certificate is attached to the NLB listener. Requires TLS passthrough to the pod or NLB termination. |
 | **cert-manager (in-cluster)** | cert-manager issues certificates (Let's Encrypt or ACM via Route 53) and stores them as Kubernetes `Secret` objects. Works with any ingress controller. |

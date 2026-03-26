@@ -138,11 +138,11 @@ locals {
       "argo-cd-${env}/TF_VAR_environment"                = { stack = "argo-cd-${env}", name = "TF_VAR_environment", value = env }
       "argo-cd-${env}/TF_VAR_argocd_resource_profile"    = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_resource_profile", value = cfg.argocd_resource_profile }
       "argo-cd-${env}/TF_VAR_argocd_source_repo"         = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_source_repo", value = cfg.argocd_source_repo }
-      "argo-cd-${env}/TF_VAR_pss_restricted_warn"        = { stack = "argo-cd-${env}", name = "TF_VAR_pss_restricted_warn", value = tostring(cfg.pss_restricted_warn) }
+      "argo-cd-${env}/TF_VAR_certificate_arn"            = { stack = "argo-cd-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn }
       "prometheus-${env}/TF_VAR_environment"             = { stack = "prometheus-${env}", name = "TF_VAR_environment", value = env }
       "prometheus-${env}/TF_VAR_prometheus_storage_size" = { stack = "prometheus-${env}", name = "TF_VAR_prometheus_storage_size", value = cfg.prometheus_storage_size }
       "prometheus-${env}/TF_VAR_loki_storage_size"       = { stack = "prometheus-${env}", name = "TF_VAR_loki_storage_size", value = cfg.loki_storage_size }
-      "prometheus-${env}/TF_VAR_pss_restricted_warn"     = { stack = "prometheus-${env}", name = "TF_VAR_pss_restricted_warn", value = tostring(cfg.pss_restricted_warn) }
+      "prometheus-${env}/TF_VAR_certificate_arn"         = { stack = "prometheus-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn }
     }
   ]...)
 }
