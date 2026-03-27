@@ -31,10 +31,14 @@ variable "argocd_source_repo" {
   type        = string
   default     = "*"
 
-  validation {
-    condition     = !(var.environment == "prod" && var.argocd_source_repo == "*")
-    error_message = "argocd_source_repo must not be '*' in production — set it to your app repository URL before promoting to prod (see docs/runbooks/connect-app-repo.md)."
-  }
+  # TODO(ADR-006): Re-enable this validation once the app manifests repo is
+  # created and argocd_source_repo is set to its URL in stacks/spacelift/variables.tf
+  # for the prod environment. Tracking: docs/decisions/006-argocd-app-repo.md
+  #
+  # validation {
+  #   condition     = !(var.environment == "prod" && var.argocd_source_repo == "*")
+  #   error_message = "argocd_source_repo must not be '*' in production — set it to your app repository URL before promoting to prod (see docs/runbooks/connect-app-repo.md)."
+  # }
 }
 
 variable "argocd_resource_profile" {
