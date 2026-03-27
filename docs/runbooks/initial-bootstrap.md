@@ -298,13 +298,13 @@ cd stacks/network     && tofu destroy
 
 ### Short-term (within 1 week)
 
-- [ ] Resolve ADR-006 — connect ArgoCD to an application repository
+- [x] Resolve ADR-006 — connect ArgoCD to an application repository (see [connect-app-repo.md](connect-app-repo.md))
 - [ ] Resolve ADR-009 — add TLS to ArgoCD and Grafana endpoints before sharing URLs externally
 - [ ] Deploy Cluster Autoscaler (ADR-007) to reduce idle node costs
 
 ### Before Production Go-Live
 
-- [ ] ADR-006 resolved and ArgoCD watching a real app repo
+- [x] ADR-006 resolved and ArgoCD watching a real app repo (see [connect-app-repo.md](connect-app-repo.md))
 - [ ] ADR-008 resolved — secrets management strategy in place
 - [ ] ADR-009 resolved — TLS on all external endpoints (certificate_arn variable wired; pending domain + ACM cert)
 - [x] NetworkPolicy resources deployed between namespaces (argocd, prometheus, kube-system)

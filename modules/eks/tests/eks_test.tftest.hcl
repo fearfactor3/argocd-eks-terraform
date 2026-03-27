@@ -51,6 +51,34 @@ override_data {
   }
 }
 
+override_data {
+  target = data.aws_iam_policy_document.cluster_autoscaler_assume_role
+  values = {
+    json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\"}]}"
+  }
+}
+
+override_data {
+  target = data.aws_iam_policy_document.cluster_autoscaler
+  values = {
+    json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"autoscaling:DescribeAutoScalingGroups\",\"Resource\":\"*\"}]}"
+  }
+}
+
+override_data {
+  target = data.aws_iam_policy_document.external_secrets_assume_role
+  values = {
+    json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Federated\":\"arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com\"},\"Action\":\"sts:AssumeRoleWithWebIdentity\"}]}"
+  }
+}
+
+override_data {
+  target = data.aws_iam_policy_document.external_secrets
+  values = {
+    json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"secretsmanager:GetSecretValue\",\"Resource\":\"*\"}]}"
+  }
+}
+
 # Mock provider generates non-ARN strings for computed arn attributes.
 # aws_eks_cluster validates role_arn, aws_eks_node_group validates node_role_arn,
 # aws_eks_addon validates service_account_role_arn, and IAM policy documents
@@ -81,6 +109,20 @@ override_resource {
   target = aws_iam_role.aws_lb_controller
   values = {
     arn = "arn:aws:iam::123456789012:role/test-cluster-aws-lb-controller"
+  }
+}
+
+override_resource {
+  target = aws_iam_role.cluster_autoscaler
+  values = {
+    arn = "arn:aws:iam::123456789012:role/test-cluster-cluster-autoscaler"
+  }
+}
+
+override_resource {
+  target = aws_iam_role.external_secrets
+  values = {
+    arn = "arn:aws:iam::123456789012:role/test-cluster-external-secrets"
   }
 }
 

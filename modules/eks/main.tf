@@ -11,6 +11,12 @@ locals {
   # data source lookup. Providing vpc_cidr_block avoids an extra AWS API call
   # during plan and makes the module's inputs explicit.
   vpc_cidr_block = coalesce(var.vpc_cidr_block, try(data.aws_vpc.this[0].cidr_block, null))
+
+  # OIDC issuer URL without the https:// prefix, used in all IRSA trust policy
+  # conditions. Extracting it here means every IRSA role implicitly depends on
+  # the OIDC provider — ensuring the provider is created before any role and
+  # destroyed only after all roles have been removed (deletion-order hint).
+  oidc_issuer = replace(aws_iam_openid_connect_provider.this.url, "https://", "")
 }
 
 # Customer-managed KMS key for encrypting Kubernetes Secrets at rest (CKV_AWS_58).
@@ -31,7 +37,7 @@ resource "aws_kms_alias" "this" {
 # The key policy grants the root account full management access so the key
 # cannot become unmanageable if the EKS cluster role is deleted. This is the
 # AWS-recommended pattern (CKV_AWS_109 / CKV_AWS_111 are suppressed in .checkov.yaml).
-resource "aws_kms_key_policy" "eks_secrets" {
+resource "aws_kms_key_policy" "this" {
   key_id = aws_kms_key.this.id
   policy = data.aws_iam_policy_document.eks_kms_key_policy.json
 }
@@ -168,6 +174,7 @@ resource "aws_eks_node_group" "this" {
 resource "aws_iam_role" "eks_cluster_role" {
   name               = "${var.cluster_name}-eks-cluster-role"
   assume_role_policy = data.aws_iam_policy_document.eks_cluster_assume_role_policy.json
+  tags               = var.tags
 }
 
 data "aws_iam_policy_document" "eks_cluster_assume_role_policy" {
@@ -219,7 +226,13 @@ resource "aws_security_group" "this" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = var.tags
+  # Cluster Autoscaler uses these tags to discover which ASGs it may manage.
+  # CA watches for pods that cannot be scheduled, then calls autoscaling:SetDesiredCapacity
+  # on ASGs with these tags. The IRSA policy below restricts mutation to tagged ASGs only.
+  tags = merge(var.tags, {
+    "k8s.io/cluster-autoscaler/enabled"             = "true"
+    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+  })
 }
 
 # IAM role attached to EC2 nodes via an instance profile. The three managed
@@ -228,6 +241,7 @@ resource "aws_security_group" "this" {
 resource "aws_iam_role" "eks_node_role" {
   name               = "${var.cluster_name}-eks-node-role"
   assume_role_policy = data.aws_iam_policy_document.eks_node_assume_role_policy.json
+  tags               = var.tags
 }
 
 data "aws_iam_policy_document" "eks_node_assume_role_policy" {
@@ -242,7 +256,8 @@ data "aws_iam_policy_document" "eks_node_assume_role_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "eks_role_attachment" {
-  for_each   = toset(local.policies)
+  for_each = toset(local.policies)
+
   role       = aws_iam_role.eks_node_role.name
   policy_arn = each.value
 }
@@ -284,6 +299,8 @@ resource "aws_iam_openid_connect_provider" "this" {
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
   url             = aws_eks_cluster.this.identity[0].oidc[0].issuer
+
+  tags = var.tags
 }
 
 # IRSA role for the EBS CSI driver. The condition restricts assumption to the
@@ -300,8 +317,8 @@ data "aws_iam_policy_document" "ebs_csi_assume_role" {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     condition {
       test     = "StringEquals"
-      variable = "${replace(aws_iam_openid_connect_provider.this.url, "https://", "")}:sub"
-      values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
+      variable = "${local.oidc_issuer}:sub"
+      values   = ["system:serviceaccount:kube-system:${var.ebs_csi_service_account}"]
     }
   }
 }
@@ -309,6 +326,7 @@ data "aws_iam_policy_document" "ebs_csi_assume_role" {
 resource "aws_iam_role" "ebs_csi" {
   name               = "${var.cluster_name}-ebs-csi-role"
   assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume_role.json
+  tags               = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "ebs_csi" {
@@ -380,8 +398,8 @@ data "aws_iam_policy_document" "aws_lb_controller_assume_role" {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     condition {
       test     = "StringEquals"
-      variable = "${replace(aws_iam_openid_connect_provider.this.url, "https://", "")}:sub"
-      values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
+      variable = "${local.oidc_issuer}:sub"
+      values   = ["system:serviceaccount:kube-system:${var.aws_lb_controller_service_account}"]
     }
   }
 }
@@ -527,4 +545,131 @@ resource "aws_autoscaling_schedule" "scale_up" {
   min_size               = var.node_group_min_capacity
   max_size               = var.node_group_max_capacity
   desired_capacity       = var.node_group_desired_capacity
+}
+
+# IRSA role for the Cluster Autoscaler. CA watches for unschedulable pods and
+# adjusts the managed node group's desired capacity via the Auto Scaling API.
+# The mutation condition restricts SetDesiredCapacity and TerminateInstance to
+# ASGs tagged with k8s.io/cluster-autoscaler/enabled=true — preventing CA from
+# accidentally scaling unrelated ASGs in the same account.
+data "aws_iam_policy_document" "cluster_autoscaler_assume_role" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.this.arn]
+    }
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_issuer}:sub"
+      values   = ["system:serviceaccount:kube-system:${var.cluster_autoscaler_service_account}"]
+    }
+  }
+}
+
+resource "aws_iam_role" "cluster_autoscaler" {
+  name               = "${var.cluster_name}-cluster-autoscaler"
+  assume_role_policy = data.aws_iam_policy_document.cluster_autoscaler_assume_role.json
+  tags               = var.tags
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler" {
+  statement {
+    sid    = "AllowASGDiscovery"
+    effect = "Allow"
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeImages",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeLaunchTemplateVersions",
+      "ec2:GetInstanceTypesFromInstanceRequirements",
+      "eks:DescribeNodegroup",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowASGMutation"
+    effect = "Allow"
+    actions = [
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+    ]
+    # Scoped to ASGs tagged as CA-managed — prevents accidental scaling of
+    # unrelated node groups or ASGs in the same account.
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/enabled"
+      values   = ["true"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "cluster_autoscaler" {
+  name   = "cluster-autoscaler-policy"
+  role   = aws_iam_role.cluster_autoscaler.id
+  policy = data.aws_iam_policy_document.cluster_autoscaler.json
+}
+
+# IRSA role for the External Secrets Operator. ESO reads secrets from AWS
+# Secrets Manager and SSM Parameter Store and materialises them as Kubernetes
+# Secret objects. The policy is scoped to the cluster's naming prefix:
+#   Secrets Manager: arn:aws:secretsmanager:*:*:secret:<cluster-name>/*
+#   SSM Parameter Store: arn:aws:ssm:*:*:parameter/<cluster-name>/*
+# Tighten to specific ARNs in production once secret paths are known.
+data "aws_iam_policy_document" "external_secrets_assume_role" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.this.arn]
+    }
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_issuer}:sub"
+      values   = ["system:serviceaccount:${var.external_secrets_namespace}:${var.external_secrets_service_account}"]
+    }
+  }
+}
+
+resource "aws_iam_role" "external_secrets" {
+  name               = "${var.cluster_name}-external-secrets"
+  assume_role_policy = data.aws_iam_policy_document.external_secrets_assume_role.json
+  tags               = var.tags
+}
+
+data "aws_iam_policy_document" "external_secrets" {
+  statement {
+    sid    = "AllowSecretsManagerRead"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret",
+    ]
+    resources = ["arn:aws:secretsmanager:*:*:secret:${var.cluster_name}/*"]
+  }
+
+  statement {
+    sid    = "AllowSSMRead"
+    effect = "Allow"
+    actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters",
+      "ssm:GetParametersByPath",
+    ]
+    resources = ["arn:aws:ssm:*:*:parameter/${var.cluster_name}/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "external_secrets" {
+  name   = "external-secrets-policy"
+  role   = aws_iam_role.external_secrets.id
+  policy = data.aws_iam_policy_document.external_secrets.json
 }

@@ -53,6 +53,11 @@ variable "node_capacity_type" {
   description = "Capacity type for the node group. SPOT for dev (~60-70% cheaper); ON_DEMAND for prod."
   type        = string
   default     = "ON_DEMAND"
+
+  validation {
+    condition     = contains(["ON_DEMAND", "SPOT"], var.node_capacity_type)
+    error_message = "node_capacity_type must be \"ON_DEMAND\" or \"SPOT\"."
+  }
 }
 
 variable "enable_scheduled_scaling" {
@@ -90,18 +95,27 @@ variable "ebs_csi_addon_version" {
   default     = "v1.56.0-eksbuild.1"
 }
 
+variable "tags" {
+  description = "Additional tags merged onto all resources. Use for cost allocation (Team, CostCenter) or compliance labels."
+  type        = map(string)
+  default     = {}
+}
+
 # Cross-stack inputs from the network stack (injected by Spacelift as TF_VAR_*)
 variable "vpc_id" {
   description = "VPC ID from the network stack"
   type        = string
+  nullable    = false
 }
 
 variable "vpc_cidr_block" {
   description = "VPC CIDR block from the network stack — scopes the EKS cluster SG ingress rule without a data lookup"
   type        = string
+  nullable    = false
 }
 
 variable "subnet_ids" {
   description = "Private subnet IDs from the network stack"
   type        = list(string)
+  nullable    = false
 }

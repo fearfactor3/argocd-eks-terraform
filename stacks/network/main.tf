@@ -23,4 +23,5 @@ module "network" {
   environment            = var.environment
   cluster_name           = var.cluster_name
   flow_logs_traffic_type = var.flow_logs_traffic_type
+  tags                   = var.tags
 }

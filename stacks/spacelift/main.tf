@@ -48,6 +48,13 @@ resource "aws_iam_role" "spacelift_integration" {
   })
 }
 
+# AdministratorAccess is intentional for this bootstrap role. Spacelift needs
+# broad permissions to create and manage all stack resources (VPC, EKS, IAM
+# roles, Helm releases). Scoping this down requires enumerating every action
+# across every provider used by every stack — a maintenance burden that is
+# disproportionate for a homelab environment where the blast radius is bounded
+# to a single AWS account. Revisit with a least-privilege policy document when
+# promoting to a production multi-account setup.
 resource "aws_iam_role_policy_attachment" "spacelift_integration" {
   role       = aws_iam_role.spacelift_integration.name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
@@ -56,13 +63,14 @@ resource "aws_iam_role_policy_attachment" "spacelift_integration" {
 # IAM is eventually consistent — wait for the role and policy to propagate
 # globally before Spacelift attempts to assume the role during attachment.
 resource "time_sleep" "iam_propagation" {
-  create_duration = "30s"
+  create_duration = "${var.iam_propagation_seconds}s"
   depends_on      = [aws_iam_role_policy_attachment.spacelift_integration]
 }
 
 # Attach the integration to every app stack so they receive AWS credentials.
 resource "spacelift_aws_integration_attachment" "env" {
-  for_each       = local.env_stacks
+  for_each = local.env_stacks
+
   integration_id = spacelift_aws_integration.this.id
   stack_id       = spacelift_stack.env[each.key].id
   read           = true
@@ -120,29 +128,31 @@ locals {
   # Per-environment variables injected into each stack via spacelift_environment_variable
   stack_env_vars = merge([
     for env, cfg in var.environments : {
-      "network-${env}/TF_VAR_environment"                = { stack = "network-${env}", name = "TF_VAR_environment", value = env }
-      "network-${env}/TF_VAR_vpc_cidr"                   = { stack = "network-${env}", name = "TF_VAR_vpc_cidr", value = cfg.vpc_cidr }
-      "network-${env}/TF_VAR_cluster_name"               = { stack = "network-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name }
-      "network-${env}/TF_VAR_public_subnets"             = { stack = "network-${env}", name = "TF_VAR_public_subnets", value = jsonencode(cfg.public_subnets) }
-      "network-${env}/TF_VAR_private_subnets"            = { stack = "network-${env}", name = "TF_VAR_private_subnets", value = jsonencode(cfg.private_subnets) }
-      "network-${env}/TF_VAR_flow_logs_traffic_type"     = { stack = "network-${env}", name = "TF_VAR_flow_logs_traffic_type", value = cfg.flow_logs_traffic_type }
-      "eks-${env}/TF_VAR_environment"                    = { stack = "eks-${env}", name = "TF_VAR_environment", value = env }
-      "eks-${env}/TF_VAR_cluster_name"                   = { stack = "eks-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name }
-      "eks-${env}/TF_VAR_node_group_instance_types"      = { stack = "eks-${env}", name = "TF_VAR_node_group_instance_types", value = jsonencode(cfg.node_instance_types) }
-      "eks-${env}/TF_VAR_node_group_desired_capacity"    = { stack = "eks-${env}", name = "TF_VAR_node_group_desired_capacity", value = tostring(cfg.node_desired) }
-      "eks-${env}/TF_VAR_node_group_max_capacity"        = { stack = "eks-${env}", name = "TF_VAR_node_group_max_capacity", value = tostring(cfg.node_max) }
-      "eks-${env}/TF_VAR_node_group_min_capacity"        = { stack = "eks-${env}", name = "TF_VAR_node_group_min_capacity", value = tostring(cfg.node_min) }
-      "eks-${env}/TF_VAR_node_capacity_type"             = { stack = "eks-${env}", name = "TF_VAR_node_capacity_type", value = cfg.node_capacity_type }
-      "eks-${env}/TF_VAR_enable_scheduled_scaling"       = { stack = "eks-${env}", name = "TF_VAR_enable_scheduled_scaling", value = tostring(cfg.enable_scheduled_scaling) }
-      "eks-addons-${env}/TF_VAR_environment"             = { stack = "eks-addons-${env}", name = "TF_VAR_environment", value = env }
-      "argo-cd-${env}/TF_VAR_environment"                = { stack = "argo-cd-${env}", name = "TF_VAR_environment", value = env }
-      "argo-cd-${env}/TF_VAR_argocd_resource_profile"    = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_resource_profile", value = cfg.argocd_resource_profile }
-      "argo-cd-${env}/TF_VAR_argocd_source_repo"         = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_source_repo", value = cfg.argocd_source_repo }
-      "argo-cd-${env}/TF_VAR_certificate_arn"            = { stack = "argo-cd-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn }
-      "prometheus-${env}/TF_VAR_environment"             = { stack = "prometheus-${env}", name = "TF_VAR_environment", value = env }
-      "prometheus-${env}/TF_VAR_prometheus_storage_size" = { stack = "prometheus-${env}", name = "TF_VAR_prometheus_storage_size", value = cfg.prometheus_storage_size }
-      "prometheus-${env}/TF_VAR_loki_storage_size"       = { stack = "prometheus-${env}", name = "TF_VAR_loki_storage_size", value = cfg.loki_storage_size }
-      "prometheus-${env}/TF_VAR_certificate_arn"         = { stack = "prometheus-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn }
+      "network-${env}/TF_VAR_environment"             = { stack = "network-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+      "network-${env}/TF_VAR_vpc_cidr"                = { stack = "network-${env}", name = "TF_VAR_vpc_cidr", value = cfg.vpc_cidr, write_only = false }
+      "network-${env}/TF_VAR_cluster_name"            = { stack = "network-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name, write_only = false }
+      "network-${env}/TF_VAR_public_subnets"          = { stack = "network-${env}", name = "TF_VAR_public_subnets", value = jsonencode(cfg.public_subnets), write_only = false }
+      "network-${env}/TF_VAR_private_subnets"         = { stack = "network-${env}", name = "TF_VAR_private_subnets", value = jsonencode(cfg.private_subnets), write_only = false }
+      "network-${env}/TF_VAR_flow_logs_traffic_type"  = { stack = "network-${env}", name = "TF_VAR_flow_logs_traffic_type", value = cfg.flow_logs_traffic_type, write_only = false }
+      "eks-${env}/TF_VAR_environment"                 = { stack = "eks-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+      "eks-${env}/TF_VAR_cluster_name"                = { stack = "eks-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name, write_only = false }
+      "eks-${env}/TF_VAR_node_group_instance_types"   = { stack = "eks-${env}", name = "TF_VAR_node_group_instance_types", value = jsonencode(cfg.node_instance_types), write_only = false }
+      "eks-${env}/TF_VAR_node_group_desired_capacity" = { stack = "eks-${env}", name = "TF_VAR_node_group_desired_capacity", value = tostring(cfg.node_desired), write_only = false }
+      "eks-${env}/TF_VAR_node_group_max_capacity"     = { stack = "eks-${env}", name = "TF_VAR_node_group_max_capacity", value = tostring(cfg.node_max), write_only = false }
+      "eks-${env}/TF_VAR_node_group_min_capacity"     = { stack = "eks-${env}", name = "TF_VAR_node_group_min_capacity", value = tostring(cfg.node_min), write_only = false }
+      "eks-${env}/TF_VAR_node_capacity_type"          = { stack = "eks-${env}", name = "TF_VAR_node_capacity_type", value = cfg.node_capacity_type, write_only = false }
+      "eks-${env}/TF_VAR_enable_scheduled_scaling"    = { stack = "eks-${env}", name = "TF_VAR_enable_scheduled_scaling", value = tostring(cfg.enable_scheduled_scaling), write_only = false }
+      "eks-addons-${env}/TF_VAR_environment"          = { stack = "eks-addons-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+      "argo-cd-${env}/TF_VAR_environment"             = { stack = "argo-cd-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+      "argo-cd-${env}/TF_VAR_argocd_resource_profile" = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_resource_profile", value = cfg.argocd_resource_profile, write_only = false }
+      "argo-cd-${env}/TF_VAR_argocd_source_repo"      = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_source_repo", value = cfg.argocd_source_repo, write_only = false }
+      # certificate_arn is marked secret — it identifies TLS infrastructure and
+      # should not be visible in Spacelift run logs or the UI.
+      "argo-cd-${env}/TF_VAR_certificate_arn"            = { stack = "argo-cd-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn, write_only = true }
+      "prometheus-${env}/TF_VAR_environment"             = { stack = "prometheus-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+      "prometheus-${env}/TF_VAR_prometheus_storage_size" = { stack = "prometheus-${env}", name = "TF_VAR_prometheus_storage_size", value = cfg.prometheus_storage_size, write_only = false }
+      "prometheus-${env}/TF_VAR_loki_storage_size"       = { stack = "prometheus-${env}", name = "TF_VAR_loki_storage_size", value = cfg.loki_storage_size, write_only = false }
+      "prometheus-${env}/TF_VAR_certificate_arn"         = { stack = "prometheus-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn, write_only = true }
     }
   ]...)
 }
@@ -180,28 +190,33 @@ resource "spacelift_stack" "env" {
 # Per-environment variables injected into stacks
 resource "spacelift_environment_variable" "env_config" {
   for_each = local.stack_env_vars
-  stack_id = spacelift_stack.env[each.value.stack].id
-  name     = each.value.name
-  value    = each.value.value
+
+  stack_id   = spacelift_stack.env[each.value.stack].id
+  name       = each.value.name
+  value      = each.value.value
+  write_only = each.value.write_only
 }
 
 # Dependencies: eks depends on network, per environment
 resource "spacelift_stack_dependency" "eks_needs_network" {
-  for_each            = var.environments
+  for_each = var.environments
+
   stack_id            = spacelift_stack.env["eks-${each.key}"].id
   depends_on_stack_id = spacelift_stack.env["network-${each.key}"].id
 }
 
 # Dependencies: eks-addons depends on eks (needs cluster + LB controller role), per environment
 resource "spacelift_stack_dependency" "eks_addons_needs_eks" {
-  for_each            = var.environments
+  for_each = var.environments
+
   stack_id            = spacelift_stack.env["eks-addons-${each.key}"].id
   depends_on_stack_id = spacelift_stack.env["eks-${each.key}"].id
 }
 
 # Dependencies: argo-cd depends on eks-addons (LB controller must be running before Ingress), per environment
 resource "spacelift_stack_dependency" "argo_cd_needs_eks_addons" {
-  for_each            = var.environments
+  for_each = var.environments
+
   stack_id            = spacelift_stack.env["argo-cd-${each.key}"].id
   depends_on_stack_id = spacelift_stack.env["eks-addons-${each.key}"].id
 }
@@ -262,6 +277,20 @@ resource "spacelift_stack_dependency_reference" "eks_addons_lb_controller_role_a
   stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
   output_name         = "aws_lb_controller_role_arn"
   input_name          = "TF_VAR_aws_lb_controller_role_arn"
+}
+
+resource "spacelift_stack_dependency_reference" "eks_addons_cluster_autoscaler_role_arn" {
+  for_each            = var.environments
+  stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
+  output_name         = "cluster_autoscaler_role_arn"
+  input_name          = "TF_VAR_cluster_autoscaler_role_arn"
+}
+
+resource "spacelift_stack_dependency_reference" "eks_addons_external_secrets_role_arn" {
+  for_each            = var.environments
+  stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
+  output_name         = "external_secrets_role_arn"
+  input_name          = "TF_VAR_external_secrets_role_arn"
 }
 
 # Cross-stack output references: eks-addons -> argo-cd

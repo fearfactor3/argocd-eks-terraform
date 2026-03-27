@@ -38,15 +38,15 @@ provider "registry.opentofu.org/hashicorp/time" {
 }
 
 provider "registry.opentofu.org/spacelift-io/spacelift" {
-  version     = "1.45.0"
+  version     = "1.46.0"
   constraints = "~> 1.0"
   hashes = [
-    "h1:TJJZuY3XjqI4brBwB31wWVx+C24scjl3RTrkkQWKDBA=",
-    "zh:092969470ba5776b47dfec3671950702d51c712607a5137225a9672fd8044899",
-    "zh:449a9778d99e895aee79ea81d46282727094fe5975b7fb9145b193a3c9e65ded",
-    "zh:4b951cf342e201050f4fc61f86ca1b036d2b35939d26a7f482466dbc6ca1b5a7",
-    "zh:b73a22a3cdc06cfe32d08dccba98f97f526ef181cb359e77bb0583836b4d6503",
-    "zh:bcf88289bf6112abe8557e762f3848765c1417448485d388473898daf96d94ba",
-    "zh:c5ec94ce6795f59eda17c737c85e2b32daa88e1156dd99585b616e929cfdc7d1",
+    "h1:cFTwVNttpe0Xi4UFD3+pQzXlgacaucUR4RXhdWdekKY=",
+    "zh:1fa29d29c41e4538716d7a216464ee49ae7bcf7e1cffc0a26676f66efa4dd6df",
+    "zh:8990945cfd4bd145d3c7fd583cd2a27a9dc7c122621697638195efe0aeefc964",
+    "zh:8d7dc1b48ba811deca0f9a945926f32607eb4d215d666c1cdefde753c87149e6",
+    "zh:d3c83e28611e278f0755ddda8967e07c4c59c2cb06ab1c73d684eed8d87dc200",
+    "zh:dd360b8eefe77eefc129f71d86031825d07f74835d353f16d680dff1f1e3f234",
+    "zh:f9e3ae284851acfec4c5450142aab636264e8bcb608aa37c7aeb698ef0c5244a",
   ]
 }

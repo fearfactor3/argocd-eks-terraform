@@ -1,6 +1,6 @@
 # ADR-006: ArgoCD Application Repository Strategy
 
-**Status**: Open — decision pending
+**Status**: Accepted — Option B (separate app repository). Each application lives in its own Git repository. ArgoCD watches the app repo and syncs Kubernetes manifests to the cluster. See [connect-app-repo.md](../runbooks/connect-app-repo.md) for the connection procedure.
 
 ---
 
@@ -10,10 +10,10 @@ ArgoCD is deployed into each environment as a GitOps engine, but it is not curre
 
 Two structural approaches exist for managing the manifests ArgoCD will reconcile:
 
-| Approach | Description |
-|----------|-------------|
-| **Monorepo** | Application manifests live in this repository, under a new top-level directory (e.g. `apps/`) |
-| **Separate app repo** | Application manifests live in a dedicated repository (e.g. `argocd-apps`), watched by ArgoCD in each environment |
+| Approach              | Description                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Monorepo**          | Application manifests live in this repository, under a new top-level directory (e.g. `apps/`)                     |
+| **Separate app repo** | Application manifests live in a dedicated repository (e.g. `argocd-apps`), watched by ArgoCD in each environment  |
 
 ---
 
@@ -57,20 +57,16 @@ Create a dedicated repository (e.g. `argocd-apps`) that contains only Kubernetes
 
 ## Decision
 
-**Not yet made.** The following factors should guide the choice:
+**Option B (separate app repository).**
 
-- **Single operator / personal project**: Option A (monorepo) is simpler and sufficient.
-- **Team with separate infra and app owners**: Option B (separate repo) enforces the right access boundary.
-- **If staging environment is added**: Option B scales better — the `ApplicationSet` git generator can target different overlays per environment from a single source.
+Each application lives in its own Git repository with Kubernetes manifests (plain YAML, Kustomize, or Helm). ArgoCD watches the app repo directly. This keeps infrastructure and application concerns cleanly separated and scales better as the number of applications grows.
+
+The `var.argocd_source_repo` variable in the `argo-cd` stack controls which repository the platform AppProject permits. Set this to your app repo URL in `dev.tfvars` / `prod.tfvars` when connecting a new app.
+
+**Reference implementation:** [fearfactor3/nginx-kustomize-example](https://github.com/fearfactor3/nginx-kustomize-example) is used as the worked example in the runbook — it demonstrates the recommended Kustomize base + per-environment overlay structure.
 
 ---
 
 ## Action Required
 
-Before the first production deployment, decide on Option A or B and:
-
-1. Create the Application/ApplicationSet manifest (or repo)
-2. Add an `argocd_application` or `argocd_application_set` Helm value to `stacks/argo-cd/main.tf` pointing at the chosen source
-3. Update this ADR to `Accepted` with the chosen approach
-
-Until this decision is made, ArgoCD is deployed but serves no GitOps function.
+Follow [docs/runbooks/connect-app-repo.md](../runbooks/connect-app-repo.md) to connect an application repository to ArgoCD.

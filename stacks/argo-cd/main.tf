@@ -118,7 +118,7 @@ module "argo_cd" {
             "alb.ingress.kubernetes.io/backend-protocol" = "GRPC"
             "alb.ingress.kubernetes.io/listen-ports"     = jsonencode([{ HTTP = 80 }])
           },
-          var.certificate_arn != "" ? {
+          var.certificate_arn != null && var.certificate_arn != "" ? {
             "alb.ingress.kubernetes.io/certificate-arn" = var.certificate_arn
             "alb.ingress.kubernetes.io/listen-ports"    = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
             "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
@@ -160,7 +160,7 @@ module "argo_cd" {
 # problem that kubernetes_manifest resources have with ArgoCD CRDs.
 #
 # The platform AppProject restricts:
-#   - Source repos: var.argocd_source_repo (default "*" until ADR-006 resolves)
+#   - Source repos: var.argocd_source_repo (set to your app repo URL; see docs/runbooks/connect-app-repo.md)
 #   - Destinations: in-cluster only (https://kubernetes.default.svc)
 # This prevents a misconfigured Application from targeting an external cluster
 # or pulling from an unexpected Git source.
@@ -181,9 +181,8 @@ resource "helm_release" "argocd_projects" {
         }
         spec = {
           description = "Platform applications for the ${var.environment} cluster"
-          # sourceRepos will be locked to the app repo once ADR-006 is resolved.
-          # Until then the wildcard allows any repo so the project does not block
-          # initial Application creation during bootstrapping.
+          # Set var.argocd_source_repo to your app repository URL.
+          # See docs/runbooks/connect-app-repo.md for the full procedure.
           sourceRepos = [var.argocd_source_repo]
           destinations = [
             {

@@ -1,13 +1,11 @@
 variable "spacelift_account_id" {
   description = "AWS account ID that Spacelift uses to assume the integration role (visible in Spacelift UI → Integrations → Trust relationship)"
   type        = string
-  default     = "577638371743"
 }
 
 variable "spacelift_org_name" {
   description = "Spacelift organization name — used as the ExternalId prefix in the trust policy (e.g. 'fearfactor3' for fearfactor3.app.spacelift.io)"
   type        = string
-  default     = "fearfactor3"
 }
 
 variable "spacelift_space_id" {
@@ -31,6 +29,17 @@ variable "opentofu_version" {
   description = "OpenTofu version for all app stacks"
   type        = string
   default     = "1.10.0"
+
+  validation {
+    condition     = can(regex("^\\d+\\.\\d+\\.\\d+$", var.opentofu_version))
+    error_message = "opentofu_version must be a semver string (e.g. \"1.10.0\")."
+  }
+}
+
+variable "iam_propagation_seconds" {
+  description = "Seconds to wait after creating the Spacelift IAM role before attaching it. IAM is eventually consistent — reduce only if your account propagates faster than the default."
+  type        = number
+  default     = 30
 }
 
 variable "autodeploy" {

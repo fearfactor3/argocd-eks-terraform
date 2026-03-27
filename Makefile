@@ -1,20 +1,24 @@
 .DEFAULT_GOAL := help
 
-STACKS := network eks eks-addons argo-cd prometheus
+STACKS     := network eks eks-addons argo-cd prometheus spacelift
+ENV_STACKS := network eks eks-addons argo-cd prometheus
 
-.PHONY: help init validate fmt fmt-check tflint check-policies markdownlint lint plan-network plan-eks plan-eks-addons plan-argo-cd plan-prometheus test-policies test-modules clean
+.PHONY: help init validate \
+        fmt fmt-check tflint check-policies markdownlint lint check \
+        plan-dev plan-prod plan-spacelift \
+        test-policies test-modules clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
-init: ## Run tofu init for all stacks
+init: ## Run tofu init for all stacks (use after provider/module changes)
 	@for stack in $(STACKS); do \
 		echo "→ init stacks/$$stack"; \
 		tofu -chdir=stacks/$$stack init -upgrade; \
 	done
 
-validate: ## Validate all stacks
+validate: ## Validate all stacks (requires tofu init first)
 	@for stack in $(STACKS); do \
 		echo "→ validate stacks/$$stack"; \
 		tofu -chdir=stacks/$$stack validate; \
@@ -36,22 +40,24 @@ check-policies: ## Format-check and unit-test all Spacelift Rego policies
 markdownlint: ## Lint all Markdown files using .github/linters/.markdownlint.json
 	markdownlint --config .github/linters/.markdownlint.json "**/*.md"
 
-lint: fmt-check tflint check-policies markdownlint ## Run all static checks locally (mirrors CI — no tofu init required)
+lint: fmt-check tflint check-policies markdownlint ## Run all static checks (mirrors CI validate — no tofu init required)
 
-plan-network: ## Plan the network stack
-	tofu -chdir=stacks/network plan
+check: lint test-modules test-policies ## Run all checks including module and policy tests (full local CI)
 
-plan-eks: ## Plan the eks stack
-	tofu -chdir=stacks/eks plan
+plan-dev: ## Plan all environment stacks (dev)
+	@for stack in $(ENV_STACKS); do \
+		echo "→ plan stacks/$$stack (dev)"; \
+		tofu -chdir=stacks/$$stack plan -var-file=dev.tfvars; \
+	done
 
-plan-eks-addons: ## Plan the eks-addons stack
-	tofu -chdir=stacks/eks-addons plan
+plan-prod: ## Plan all environment stacks (prod)
+	@for stack in $(ENV_STACKS); do \
+		echo "→ plan stacks/$$stack (prod)"; \
+		tofu -chdir=stacks/$$stack plan -var-file=prod.tfvars; \
+	done
 
-plan-argo-cd: ## Plan the argo-cd stack
-	tofu -chdir=stacks/argo-cd plan
-
-plan-prometheus: ## Plan the prometheus stack
-	tofu -chdir=stacks/prometheus plan
+plan-spacelift: ## Plan the spacelift management stack
+	tofu -chdir=stacks/spacelift plan
 
 test-modules: ## Run native OpenTofu tests for all modules (no AWS credentials required)
 	tofu -chdir=modules/network test
@@ -62,7 +68,6 @@ test-policies: ## Test Spacelift Rego policies with OPA
 	opa test stacks/spacelift/policies/prod-plan.rego stacks/spacelift/policies/prod-plan_test.rego -v
 	opa test stacks/spacelift/policies/prod-approval.rego stacks/spacelift/policies/prod-approval_test.rego -v
 
-clean: ## Remove all .terraform directories and lock files
+clean: ## Remove .terraform plugin cache directories (lock files are preserved)
 	@find stacks -type d -name ".terraform" -exec rm -rf {} + 2>/dev/null || true
-	@find stacks -name ".terraform.lock.hcl" -delete 2>/dev/null || true
 	@echo "Cleaned stacks/.terraform directories"

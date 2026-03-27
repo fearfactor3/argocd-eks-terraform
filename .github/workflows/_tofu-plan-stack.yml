@@ -48,6 +48,7 @@ jobs:
   plan:
     name: plan
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       # TF_IN_AUTOMATION suppresses interactive prompts and adjusts output
       # formatting for CI — OpenTofu detects this and skips suggestions like
@@ -94,6 +95,8 @@ jobs:
               echo "TF_VAR_eks_cluster_endpoint=https://stub.gr7.us-east-1.eks.amazonaws.com"
               echo "TF_VAR_cluster_ca_certificate=LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBMFZ3PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
               echo "TF_VAR_aws_lb_controller_role_arn=arn:aws:iam::123456789012:role/argocd-dev-aws-lb-controller"
+              echo "TF_VAR_cluster_autoscaler_role_arn=arn:aws:iam::123456789012:role/argocd-dev-cluster-autoscaler"
+              echo "TF_VAR_external_secrets_role_arn=arn:aws:iam::123456789012:role/argocd-dev-external-secrets"
             } >> "$GITHUB_ENV"
           elif [[ "${{ inputs.environment }}" == "prod" ]]; then
             {
@@ -104,6 +107,8 @@ jobs:
               echo "TF_VAR_eks_cluster_endpoint=https://stub.gr7.us-east-1.eks.amazonaws.com"
               echo "TF_VAR_cluster_ca_certificate=LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBMFZ3PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
               echo "TF_VAR_aws_lb_controller_role_arn=arn:aws:iam::123456789012:role/argocd-prod-aws-lb-controller"
+              echo "TF_VAR_cluster_autoscaler_role_arn=arn:aws:iam::123456789012:role/argocd-prod-cluster-autoscaler"
+              echo "TF_VAR_external_secrets_role_arn=arn:aws:iam::123456789012:role/argocd-prod-external-secrets"
             } >> "$GITHUB_ENV"
           fi
 
@@ -146,7 +151,9 @@ jobs:
             write_if_set TF_VAR_eks_cluster_name        "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
             write_if_set TF_VAR_eks_cluster_endpoint    "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
             write_if_set TF_VAR_cluster_ca_certificate  "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_ca_certificate") | .value')"
-            write_if_set TF_VAR_aws_lb_controller_role_arn "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="aws_lb_controller_role_arn") | .value')"
+            write_if_set TF_VAR_aws_lb_controller_role_arn    "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="aws_lb_controller_role_arn") | .value')"
+            write_if_set TF_VAR_cluster_autoscaler_role_arn   "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="cluster_autoscaler_role_arn") | .value')"
+            write_if_set TF_VAR_external_secrets_role_arn     "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="external_secrets_role_arn") | .value')"
           elif [[ "${{ inputs.stack_name }}" == "argo-cd" || "${{ inputs.stack_name }}" == "prometheus" ]]; then
             write_if_set TF_VAR_eks_cluster_name       "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_name") | .value')"
             write_if_set TF_VAR_eks_cluster_endpoint   "$(echo "$OUTPUTS" | jq -r '.[] | select(.id=="eks_cluster_endpoint") | .value')"
