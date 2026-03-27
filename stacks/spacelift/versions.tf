@@ -1,3 +1,6 @@
+# No backend block — Spacelift injects its own state backend for all managed
+# stacks. Adding a backend block here would conflict with Spacelift's state
+# management. The spacelift stack itself bootstraps locally (see docs/bootstrap.md).
 terraform {
   required_providers {
     aws = {

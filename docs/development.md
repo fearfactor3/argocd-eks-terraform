@@ -9,9 +9,9 @@ Day-to-day development workflow for this repository.
 ```sh
 git checkout -b feat/eks-add-kms-key-policy
 
-# Format and validate before committing
+# Format and run all static checks before committing
 make fmt
-make validate
+make lint
 
 # Commit — commitlint enforces conventional format on every commit
 git commit -m "feat(eks): add KMS key policy for secrets encryption"
@@ -33,21 +33,28 @@ All checks must pass before merging.
 
 ## Local Stack Operations
 
+| Target | What it does |
+| ------ | ------------ |
+| `make lint` | fmt-check + tflint + policy format + markdownlint (no init required) |
+| `make check` | All of `lint` plus module tests and policy unit tests |
+| `make plan-dev` | Plan all environment stacks with dev.tfvars |
+| `make plan-prod` | Plan all environment stacks with prod.tfvars |
+| `make plan-spacelift` | Plan the Spacelift management stack |
+| `make validate` | Schema-validate all stacks (requires `tofu init` first) |
+
 Local plans run against empty state — useful for validating configuration but do
 not reflect the actual delta against deployed infrastructure.
 
 ```sh
-make plan-network
-make plan-eks
-make plan-argo-cd
-make plan-prometheus
+make plan-dev
+make plan-prod
 ```
 
-Or directly:
+Or directly for a single stack:
 
 ```sh
 tofu -chdir=stacks/network init -backend=false
-tofu -chdir=stacks/network plan
+tofu -chdir=stacks/network plan -var-file=dev.tfvars
 ```
 
 ---
@@ -85,3 +92,41 @@ pre-commit run --all-files
 - OPA version (`validate.yml`)
 
 Review and merge Renovate PRs regularly. All checks must pass before merging.
+
+---
+
+## Branch Protection (main)
+
+Configure these settings under **Settings → Branches → main** in GitHub:
+
+| Setting | Value |
+| ------- | ----- |
+| Require a pull request before merging | Enabled |
+| Required approvals | 1 (raise to 2 for team use) |
+| Dismiss stale reviews on new commits | Enabled |
+| Require status checks to pass | Enabled |
+| Require branches to be up to date | Enabled |
+| Allow force pushes | Disabled |
+| Allow deletions | Disabled |
+
+**Required status checks** (add each by name):
+
+| Check name | Workflow |
+| ---------- | -------- |
+| `Detect changes` | `opentofu-validate` |
+| `Format check` | `opentofu-validate` |
+| `Validate (argo-cd)` | `opentofu-validate` |
+| `Validate (eks)` | `opentofu-validate` |
+| `Validate (eks-addons)` | `opentofu-validate` |
+| `Validate (iam)` | `opentofu-validate` |
+| `Validate (network)` | `opentofu-validate` |
+| `Validate (prometheus)` | `opentofu-validate` |
+| `Validate (spacelift)` | `opentofu-validate` |
+| `Test Rego policies` | `opentofu-validate` |
+| `Test modules` | `opentofu-validate` |
+| `tflint` | `opentofu-validate` |
+| `plan-summary` | `opentofu-plan` |
+| `commitlint` | `commitlint` |
+| `MegaLinter` | `megalinter` |
+
+**Merge strategy:** Squash merge only. Each PR lands as a single conventional commit on `main`, which Spacelift uses as the trigger for automated runs.

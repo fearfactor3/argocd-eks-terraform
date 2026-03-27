@@ -24,17 +24,20 @@ variable "prometheus_chart_version" {
 variable "eks_cluster_name" {
   description = "EKS cluster name from the eks stack"
   type        = string
+  nullable    = false
 }
 
 variable "eks_cluster_endpoint" {
   description = "EKS cluster API endpoint from the eks stack"
   type        = string
+  nullable    = false
 }
 
 variable "cluster_ca_certificate" {
   description = "Base64-encoded CA certificate from the eks stack"
   type        = string
   sensitive   = true
+  nullable    = false
 }
 
 variable "prometheus_storage_size" {
@@ -50,9 +53,9 @@ variable "loki_storage_size" {
 }
 
 variable "certificate_arn" {
-  description = "ACM certificate ARN for ALB TLS termination. When set, the ALB uses HTTPS with SSL redirect. Leave empty (default) for HTTP-only — suitable for homelab until a domain is registered."
+  description = "ACM certificate ARN for ALB TLS termination. When set, the ALB uses HTTPS with SSL redirect. Leave unset (default null) for HTTP-only — suitable for homelab until a domain is registered."
   type        = string
-  default     = ""
+  default     = null
 }
 
 variable "loki_chart_version" {

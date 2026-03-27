@@ -23,3 +23,13 @@ output "aws_lb_controller_role_arn" {
   description = "IAM role ARN for the AWS Load Balancer Controller — consumed by the eks-addons stack"
   value       = module.eks_cluster.aws_lb_controller_role_arn
 }
+
+output "cluster_autoscaler_role_arn" {
+  description = "IAM role ARN for the Cluster Autoscaler — consumed by the eks-addons stack"
+  value       = module.eks_cluster.cluster_autoscaler_role_arn
+}
+
+output "external_secrets_role_arn" {
+  description = "IAM role ARN for the External Secrets Operator — consumed by the eks-addons stack"
+  value       = module.eks_cluster.external_secrets_role_arn
+}

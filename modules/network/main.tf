@@ -206,7 +206,9 @@ resource "aws_flow_log" "vpc" {
   iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
 
-  tags = local.common_tags
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-${var.environment}-vpc-flow-log"
+  })
 }
 
 # Locking down the default security group prevents accidental assignment to

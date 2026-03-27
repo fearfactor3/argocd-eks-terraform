@@ -27,10 +27,12 @@ module "eks_cluster" {
     "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vpc-flow-logs/${var.cluster_name}:*",
   ]
 
-  tags = {
-    Environment = var.environment
-    Team        = "DevOps"
-    Project     = var.cluster_name
-    ManagedBy   = "opentofu"
-  }
+  tags = merge(
+    {
+      Environment = var.environment
+      Project     = var.cluster_name
+      ManagedBy   = "opentofu"
+    },
+    var.tags
+  )
 }

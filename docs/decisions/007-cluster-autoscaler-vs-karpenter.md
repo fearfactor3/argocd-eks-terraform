@@ -1,6 +1,6 @@
 # ADR-007: Cluster Autoscaler vs. Karpenter vs. Fixed Node Sizing
 
-**Status**: Open — decision pending
+**Status**: Accepted — Option A (Cluster Autoscaler)
 
 ---
 
@@ -75,11 +75,9 @@ No autoscaler. Nodes run at `desired_size` continuously.
 
 ## Decision
 
-**Not yet made.** Recommended path:
+**Option A — Cluster Autoscaler** is deployed in `stacks/eks-addons` via Helm. The managed node group in `modules/eks` is tagged for CA discovery, and an IRSA role scoped to the `kube-system:cluster-autoscaler` service account grants the minimum required ASG permissions.
 
-1. **Short-term**: Keep fixed sizing for the initial bootstrap. Validate the cluster is stable before adding autoscaling complexity.
-2. **Medium-term (dev)**: Add Cluster Autoscaler. Scale `min_size=1` to allow the cluster to drop to a single node during idle periods. Expected saving: ~$30–35/month (one t3.medium eliminated overnight/weekends).
-3. **Long-term (prod)**: Evaluate Karpenter when Spot instances are introduced for non-critical workloads. Karpenter's Spot fallback logic is more robust than CA's.
+Karpenter remains a future option if Spot instance management or sub-minute scale-up becomes a priority. It would require migrating away from the managed node group, which is a larger change best deferred until the cluster is proven stable.
 
 ---
 

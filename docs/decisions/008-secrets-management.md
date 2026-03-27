@@ -1,6 +1,6 @@
 # ADR-008: Secrets Management for Application Workloads
 
-**Status**: Open — decision pending
+**Status**: Accepted — Option A (External Secrets Operator)
 
 ---
 
@@ -76,24 +76,6 @@ Vault provides a full secrets engine with dynamic credentials, audit logging, an
 
 ## Decision
 
-**Not yet made.** Recommended path:
+**Option A — External Secrets Operator** is deployed in `stacks/eks-addons` via Helm. An IRSA role scoped to the `external-secrets:external-secrets` service account grants read access to AWS Secrets Manager and SSM Parameter Store paths under `/<cluster-name>/`. Application teams create `ExternalSecret` CRs referencing secrets by path — no secret values are stored in Git.
 
-Given the existing AWS-native posture of this project (IRSA, KMS, Secrets Manager access already possible via IAM), **External Secrets Operator is the recommended starting point**:
-
-- Aligns with the IRSA pattern already established in ADR-004
-- No new infrastructure to operate
-- Secrets Manager provides rotation, versioning, and audit logging out of the box
-- The ESO `ExternalSecret` CRD is a safe, non-sensitive manifest to commit to the app repo (see ADR-006)
-
-Sealed Secrets is a reasonable alternative if the team prefers a fully offline, Git-native workflow with no runtime AWS dependency.
-
----
-
-## Action Required
-
-Before application workloads are deployed via ArgoCD:
-
-1. Decide between ESO and Sealed Secrets
-2. If ESO: add an IRSA role in `modules/eks/main.tf` scoped to the ESO service account, with `secretsmanager:GetSecretValue` on the relevant secret ARNs
-3. Deploy ESO or Sealed Secrets via Helm (add to a `stacks/cluster-addons` stack)
-4. Update this ADR to `Accepted`
+See [docs/runbooks/configure-external-secrets.md](../runbooks/configure-external-secrets.md) for how to configure a `ClusterSecretStore` and create your first `ExternalSecret`.

@@ -6,10 +6,12 @@ on:
       - main
   workflow_dispatch:
 
+# pull-requests: write is intentionally omitted here — granting it at workflow
+# level would give every reusable plan job PR write access, which they do not
+# need. It is declared only on the plan-summary job that posts PR comments.
 permissions:
   contents: read
   id-token: write
-  pull-requests: write
 
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
@@ -155,6 +157,7 @@ jobs:
       - plan-prometheus-prod
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       pull-requests: write
     steps:

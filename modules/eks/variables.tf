@@ -173,3 +173,35 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# IRSA service account bindings — override if the Helm chart deploys with a
+# non-default service account name (e.g. when using a custom values file).
+variable "ebs_csi_service_account" {
+  description = "Kubernetes service account name for the EBS CSI controller in kube-system"
+  type        = string
+  default     = "ebs-csi-controller-sa"
+}
+
+variable "aws_lb_controller_service_account" {
+  description = "Kubernetes service account name for the AWS Load Balancer Controller in kube-system"
+  type        = string
+  default     = "aws-load-balancer-controller"
+}
+
+variable "cluster_autoscaler_service_account" {
+  description = "Kubernetes service account name for the Cluster Autoscaler in kube-system"
+  type        = string
+  default     = "cluster-autoscaler"
+}
+
+variable "external_secrets_namespace" {
+  description = "Kubernetes namespace where the External Secrets Operator is installed"
+  type        = string
+  default     = "external-secrets"
+}
+
+variable "external_secrets_service_account" {
+  description = "Kubernetes service account name for the External Secrets Operator"
+  type        = string
+  default     = "external-secrets"
+}
