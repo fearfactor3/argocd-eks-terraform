@@ -175,9 +175,17 @@ variable "tags" {
 }
 
 variable "admin_iam_principals" {
-  description = "IAM principal ARNs (users or roles) granted AmazonEKSClusterAdminPolicy via access entries. Requires authentication_mode API_AND_CONFIG_MAP or API."
+  description = "IAM principal ARNs (users or roles) granted AmazonEKSClusterAdminPolicy via access entries. Requires authentication_mode API_AND_CONFIG_MAP or API. Prefer role ARNs over user ARNs so access is revoked by removing the role assumption, not by editing this list."
   type        = list(string)
   default     = []
+
+  validation {
+    condition = alltrue([
+      for arn in var.admin_iam_principals :
+      can(regex("^arn:aws:iam::[0-9]{12}:(user|role|assumed-role)/.+$", arn))
+    ])
+    error_message = "All admin_iam_principals must be valid IAM ARNs (arn:aws:iam::{account}:{user|role|assumed-role}/{name})."
+  }
 }
 
 # IRSA service account bindings — override if the Helm chart deploys with a

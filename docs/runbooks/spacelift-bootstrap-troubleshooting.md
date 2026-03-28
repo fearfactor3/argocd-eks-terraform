@@ -197,3 +197,86 @@ network-dev → eks-dev → eks-addons-dev → argo-cd-dev + prometheus-dev
 ```
 
 Do not trigger downstream stacks until their upstream dependency shows `FINISHED`.
+
+---
+
+## Spacelift output values have extra quotes (e.g. `"10.0.0.0/16"`)
+
+**Symptom:** A stack fails with a CIDR or string validation error where the value shown has embedded double-quotes — e.g. `"\"10.0.0.0/16\""` is not a valid CIDR block.
+
+**Cause:** Spacelift JSON-encodes string output values. When `spacectl stack outputs --output json` returns a value it is stored as a JSON string within JSON — `"\"10.0.0.0/16\""`. A naive `jq -r .value` strips one layer of quoting but leaves the inner quotes, resulting in `"10.0.0.0/16"` (with literal double-quotes) being passed as the variable value.
+
+**Fix (already applied):** The `_tofu-plan-stack.yml` CI workflow strips surrounding quotes from all Spacelift output values using bash parameter expansion before writing to `GITHUB_ENV`. If you see this in a new context, strip the leading/trailing `"` from the value before use:
+
+```bash
+val="${val#\"}"; val="${val%\"}"
+```
+
+---
+
+## Downstream stacks receive `null` for cross-stack outputs
+
+**Symptom:** A plan fails with `Call to function "base64decode" failed` or a provider config error referencing a variable that shows as `null` in the CI log.
+
+**Cause:** Spacelift returns `null` for outputs not yet available (e.g. `cluster_ca_certificate` before `eks-dev` has applied). The CI stub injection sets a valid placeholder, but the Spacelift fetch step was overwriting it with the string `"null"`.
+
+**Fix (already applied):** The jq expression in `_tofu-plan-stack.yml` includes `select(.value != null)` to skip null outputs entirely, preserving the stub values. If you encounter this elsewhere, guard against null before writing to the environment.
+
+---
+
+## Module file changes do not trigger Spacelift stack runs
+
+**Symptom:** You push a change to `modules/eks/` or `modules/network/` but the corresponding `eks-dev` / `network-dev` stack does not queue a new tracked run.
+
+**Cause:** Spacelift only scans a stack's `project_root` for file changes. The `stacks/eks` project root is `stacks/eks/` — changes inside `modules/eks/` fall outside that path and are invisible to Spacelift's change detection.
+
+**Fix (already applied):** The `eks` and `network` stacks have `additional_project_globs` configured to also watch their respective module directories:
+
+```hcl
+additional_project_globs = ["modules/eks/**/*"]   # for eks stacks
+additional_project_globs = ["modules/network/**/*"] # for network stacks
+```
+
+If you add a new stack that references a local module, add the module path to `extra_globs` in `env_stack_types` in `stacks/spacelift/main.tf`.
+
+---
+
+## Retrying a failed run does not trigger downstream stacks
+
+**Symptom:** `eks-dev` fails, you fix the issue and retry the run. It succeeds, but `eks-addons-dev` never queues.
+
+**Cause:** This is a documented Spacelift limitation — retries of previously failed runs do not trigger dependent stacks even when successful. See [Spacelift docs: stack dependency reference limitations](https://docs.spacelift.io/concepts/stack/stack-dependencies.html#stack-dependency-reference-limitations).
+
+**Fix:** After a retry succeeds, manually trigger the next stack in the dependency chain:
+
+```text
+network-dev → eks-dev → eks-addons-dev → argo-cd-dev + prometheus-dev
+```
+
+To trigger `eks-addons-dev` from the CLI:
+
+```bash
+spacectl stack trigger --id eks-addons-dev
+```
+
+---
+
+## Helm release stuck in failed state — `cannot re-use a name that is still in use`
+
+**Symptom:** A Spacelift apply fails with `Error: installation failed — cannot re-use a name that is still in use` on a `helm_release` resource.
+
+**Cause:** A previous failed apply installed a partial Helm release, leaving it in `failed` or `pending-install` state. Helm blocks reinstalling a release that is already registered, even in a failed state.
+
+**Fix:** Uninstall the stuck release directly from the cluster, then re-trigger the Spacelift apply:
+
+```bash
+# Authenticate first
+aws eks update-kubeconfig --name <cluster-name> --region us-east-1
+
+helm uninstall <release-name> -n <namespace>
+# e.g. helm uninstall aws-load-balancer-controller -n kube-system
+#      helm uninstall external-secrets -n external-secrets
+#      helm uninstall cluster-autoscaler -n kube-system
+```
+
+**Prevention (already applied):** All Helm releases in `eks-addons` now have `cleanup_on_fail = true`, which automatically rolls back and removes resources if a release fails, preventing stuck state on future failures.

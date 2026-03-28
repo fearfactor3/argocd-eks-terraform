@@ -145,7 +145,10 @@ locals {
       stack_type   = pair[1]
       description  = "${local.env_stack_types[pair[1]].description} (${pair[0]})"
       project_root = local.env_stack_types[pair[1]].project_root
-      extra_globs  = local.env_stack_types[pair[1]].extra_globs
+      # Only watch module directories for non-prod environments.
+      # Prod stacks trigger on explicit stack code changes (project_root) only,
+      # preventing iterative dev/module work from queuing unwanted prod runs.
+      extra_globs = pair[0] == "prod" ? [] : local.env_stack_types[pair[1]].extra_globs
     }
   }
 

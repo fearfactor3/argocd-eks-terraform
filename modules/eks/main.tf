@@ -128,6 +128,14 @@ resource "aws_eks_cluster" "this" {
 
 # Grant cluster admin access to each IAM principal in var.admin_iam_principals.
 # Useful for operators who need kubectl access without assuming the Spacelift role.
+#
+# SECURITY NOTES:
+# - Access entries do not expire. Prefer role ARNs over user ARNs — access is
+#   then revoked by removing the role, not by editing this list.
+# - Audit admin_iam_principals quarterly and remove stale principals promptly.
+# - Changes to this list are logged by CloudTrail under eks:CreateAccessEntry /
+#   eks:DeleteAccessEntry / eks:AssociateAccessPolicy. Ensure CloudTrail is
+#   enabled at the account level (managed outside this module).
 resource "aws_eks_access_entry" "admin" {
   for_each = toset(var.admin_iam_principals)
 
