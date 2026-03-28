@@ -207,7 +207,7 @@ data "aws_vpc" "this" {
 # (see .trivyignore for AVD-AWS-0104).
 resource "aws_security_group" "this" {
   name        = "${var.cluster_name}-eks-cluster-sg"
-  description = "EKS cluster API server — restricts HTTPS ingress to VPC CIDR"
+  description = "EKS cluster API server - restricts HTTPS ingress to VPC CIDR"
   vpc_id      = var.vpc_id
 
   ingress {
