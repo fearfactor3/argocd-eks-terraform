@@ -34,6 +34,7 @@ jobs:
           scopes: |
             network
             eks
+            eks-addons
             argo-cd
             prometheus
             iam
