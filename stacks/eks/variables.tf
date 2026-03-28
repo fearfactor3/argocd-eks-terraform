@@ -69,6 +69,16 @@ variable "enable_scheduled_scaling" {
 variable "public_access_cidrs" {
   description = "CIDR blocks permitted to reach the EKS public API endpoint"
   type        = list(string)
+
+  validation {
+    condition     = length(var.public_access_cidrs) > 0
+    error_message = "public_access_cidrs must not be empty."
+  }
+
+  validation {
+    condition     = alltrue([for cidr in var.public_access_cidrs : can(cidrhost(cidr, 0))])
+    error_message = "All public_access_cidrs must be valid CIDR blocks."
+  }
 }
 
 variable "vpc_cni_addon_version" {

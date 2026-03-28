@@ -3,6 +3,11 @@ output "eks_cluster_name" {
   value       = aws_eks_cluster.this.name
 }
 
+output "vpc_id" {
+  description = "VPC ID the EKS cluster is deployed in — passed to eks-addons so the LB controller does not need to query EC2 instance metadata"
+  value       = var.vpc_id
+}
+
 output "eks_cluster_endpoint" {
   description = "Endpoint of the EKS cluster"
   value       = aws_eks_cluster.this.endpoint

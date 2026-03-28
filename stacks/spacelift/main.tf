@@ -155,25 +155,26 @@ locals {
   # Per-environment variables injected into each stack via spacelift_environment_variable
   stack_env_vars = merge([
     for env, cfg in var.environments : {
-      "network-${env}/TF_VAR_environment"             = { stack = "network-${env}", name = "TF_VAR_environment", value = env, write_only = false }
-      "network-${env}/TF_VAR_vpc_cidr"                = { stack = "network-${env}", name = "TF_VAR_vpc_cidr", value = cfg.vpc_cidr, write_only = false }
-      "network-${env}/TF_VAR_cluster_name"            = { stack = "network-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name, write_only = false }
-      "network-${env}/TF_VAR_public_subnets"          = { stack = "network-${env}", name = "TF_VAR_public_subnets", value = jsonencode(cfg.public_subnets), write_only = false }
-      "network-${env}/TF_VAR_private_subnets"         = { stack = "network-${env}", name = "TF_VAR_private_subnets", value = jsonencode(cfg.private_subnets), write_only = false }
-      "network-${env}/TF_VAR_flow_logs_traffic_type"  = { stack = "network-${env}", name = "TF_VAR_flow_logs_traffic_type", value = cfg.flow_logs_traffic_type, write_only = false }
-      "eks-${env}/TF_VAR_environment"                 = { stack = "eks-${env}", name = "TF_VAR_environment", value = env, write_only = false }
-      "eks-${env}/TF_VAR_cluster_name"                = { stack = "eks-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name, write_only = false }
-      "eks-${env}/TF_VAR_node_group_instance_types"   = { stack = "eks-${env}", name = "TF_VAR_node_group_instance_types", value = jsonencode(cfg.node_instance_types), write_only = false }
-      "eks-${env}/TF_VAR_node_group_desired_capacity" = { stack = "eks-${env}", name = "TF_VAR_node_group_desired_capacity", value = tostring(cfg.node_desired), write_only = false }
-      "eks-${env}/TF_VAR_node_group_max_capacity"     = { stack = "eks-${env}", name = "TF_VAR_node_group_max_capacity", value = tostring(cfg.node_max), write_only = false }
-      "eks-${env}/TF_VAR_node_group_min_capacity"     = { stack = "eks-${env}", name = "TF_VAR_node_group_min_capacity", value = tostring(cfg.node_min), write_only = false }
-      "eks-${env}/TF_VAR_node_capacity_type"          = { stack = "eks-${env}", name = "TF_VAR_node_capacity_type", value = cfg.node_capacity_type, write_only = false }
-      "eks-${env}/TF_VAR_enable_scheduled_scaling"    = { stack = "eks-${env}", name = "TF_VAR_enable_scheduled_scaling", value = tostring(cfg.enable_scheduled_scaling), write_only = false }
-      "eks-${env}/TF_VAR_public_access_cidrs"         = { stack = "eks-${env}", name = "TF_VAR_public_access_cidrs", value = jsonencode(cfg.public_access_cidrs), write_only = false }
-      "eks-addons-${env}/TF_VAR_environment"          = { stack = "eks-addons-${env}", name = "TF_VAR_environment", value = env, write_only = false }
-      "argo-cd-${env}/TF_VAR_environment"             = { stack = "argo-cd-${env}", name = "TF_VAR_environment", value = env, write_only = false }
-      "argo-cd-${env}/TF_VAR_argocd_resource_profile" = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_resource_profile", value = cfg.argocd_resource_profile, write_only = false }
-      "argo-cd-${env}/TF_VAR_argocd_source_repo"      = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_source_repo", value = cfg.argocd_source_repo, write_only = false }
+      "network-${env}/TF_VAR_environment"              = { stack = "network-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+      "network-${env}/TF_VAR_vpc_cidr"                 = { stack = "network-${env}", name = "TF_VAR_vpc_cidr", value = cfg.vpc_cidr, write_only = false }
+      "network-${env}/TF_VAR_cluster_name"             = { stack = "network-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name, write_only = false }
+      "network-${env}/TF_VAR_public_subnets"           = { stack = "network-${env}", name = "TF_VAR_public_subnets", value = jsonencode(cfg.public_subnets), write_only = false }
+      "network-${env}/TF_VAR_private_subnets"          = { stack = "network-${env}", name = "TF_VAR_private_subnets", value = jsonencode(cfg.private_subnets), write_only = false }
+      "network-${env}/TF_VAR_flow_logs_traffic_type"   = { stack = "network-${env}", name = "TF_VAR_flow_logs_traffic_type", value = cfg.flow_logs_traffic_type, write_only = false }
+      "network-${env}/TF_VAR_flow_logs_retention_days" = { stack = "network-${env}", name = "TF_VAR_flow_logs_retention_days", value = tostring(cfg.flow_logs_retention_days), write_only = false }
+      "eks-${env}/TF_VAR_environment"                  = { stack = "eks-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+      "eks-${env}/TF_VAR_cluster_name"                 = { stack = "eks-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name, write_only = false }
+      "eks-${env}/TF_VAR_node_group_instance_types"    = { stack = "eks-${env}", name = "TF_VAR_node_group_instance_types", value = jsonencode(cfg.node_instance_types), write_only = false }
+      "eks-${env}/TF_VAR_node_group_desired_capacity"  = { stack = "eks-${env}", name = "TF_VAR_node_group_desired_capacity", value = tostring(cfg.node_desired), write_only = false }
+      "eks-${env}/TF_VAR_node_group_max_capacity"      = { stack = "eks-${env}", name = "TF_VAR_node_group_max_capacity", value = tostring(cfg.node_max), write_only = false }
+      "eks-${env}/TF_VAR_node_group_min_capacity"      = { stack = "eks-${env}", name = "TF_VAR_node_group_min_capacity", value = tostring(cfg.node_min), write_only = false }
+      "eks-${env}/TF_VAR_node_capacity_type"           = { stack = "eks-${env}", name = "TF_VAR_node_capacity_type", value = cfg.node_capacity_type, write_only = false }
+      "eks-${env}/TF_VAR_enable_scheduled_scaling"     = { stack = "eks-${env}", name = "TF_VAR_enable_scheduled_scaling", value = tostring(cfg.enable_scheduled_scaling), write_only = false }
+      "eks-${env}/TF_VAR_public_access_cidrs"          = { stack = "eks-${env}", name = "TF_VAR_public_access_cidrs", value = jsonencode(cfg.public_access_cidrs), write_only = false }
+      "eks-addons-${env}/TF_VAR_environment"           = { stack = "eks-addons-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+      "argo-cd-${env}/TF_VAR_environment"              = { stack = "argo-cd-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+      "argo-cd-${env}/TF_VAR_argocd_resource_profile"  = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_resource_profile", value = cfg.argocd_resource_profile, write_only = false }
+      "argo-cd-${env}/TF_VAR_argocd_source_repo"       = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_source_repo", value = cfg.argocd_source_repo, write_only = false }
       # certificate_arn is marked secret — it identifies TLS infrastructure and
       # should not be visible in Spacelift run logs or the UI.
       "argo-cd-${env}/TF_VAR_certificate_arn"            = { stack = "argo-cd-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn, write_only = true }
@@ -288,6 +289,13 @@ resource "spacelift_stack_dependency_reference" "vpc_cidr_block" {
 }
 
 # Cross-stack output references: eks -> eks-addons
+resource "spacelift_stack_dependency_reference" "eks_addons_vpc_id" {
+  for_each            = var.environments
+  stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
+  output_name         = "vpc_id"
+  input_name          = "TF_VAR_vpc_id"
+}
+
 resource "spacelift_stack_dependency_reference" "eks_addons_cluster_name" {
   for_each            = var.environments
   stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id

@@ -33,6 +33,12 @@ variable "external_secrets_chart_version" {
 }
 
 # Cross-stack inputs from the eks stack (injected by Spacelift as TF_VAR_*)
+variable "vpc_id" {
+  description = "VPC ID from the eks stack — passed to the LB controller so it does not need to query EC2 instance metadata (blocked by IMDSv2 hop_limit=1)"
+  type        = string
+  nullable    = false
+}
+
 variable "eks_cluster_name" {
   description = "EKS cluster name from the eks stack"
   type        = string
