@@ -101,6 +101,12 @@ variable "tags" {
   default     = {}
 }
 
+variable "admin_iam_principals" {
+  description = "IAM principal ARNs granted cluster admin access via EKS access entries. Set to operator IAM user/role ARNs that need kubectl access."
+  type        = list(string)
+  default     = []
+}
+
 # Cross-stack inputs from the network stack (injected by Spacelift as TF_VAR_*)
 variable "vpc_id" {
   description = "VPC ID from the network stack"

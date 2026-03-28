@@ -99,6 +99,13 @@ resource "aws_eks_cluster" "this" {
     public_access_cidrs     = var.public_access_cidrs
   }
 
+  # API_AND_CONFIG_MAP enables both the newer EKS access entry API and the
+  # legacy aws-auth ConfigMap, so existing node group mappings are preserved
+  # while admin_iam_principals can be granted access via access entries.
+  access_config {
+    authentication_mode = "API_AND_CONFIG_MAP"
+  }
+
   # All control plane log types shipped to CloudWatch for audit and debugging.
   # This satisfies CKV_AWS_37 and provides visibility into API server activity,
   # authentication events, and controller decisions.
@@ -117,6 +124,39 @@ resource "aws_eks_cluster" "this" {
   tags = var.tags
 
   depends_on = [aws_cloudwatch_log_group.eks_control_plane]
+}
+
+# Grant cluster admin access to each IAM principal in var.admin_iam_principals.
+# Useful for operators who need kubectl access without assuming the Spacelift role.
+#
+# SECURITY NOTES:
+# - Access entries do not expire. Prefer role ARNs over user ARNs — access is
+#   then revoked by removing the role, not by editing this list.
+# - Audit admin_iam_principals quarterly and remove stale principals promptly.
+# - Changes to this list are logged by CloudTrail under eks:CreateAccessEntry /
+#   eks:DeleteAccessEntry / eks:AssociateAccessPolicy. Ensure CloudTrail is
+#   enabled at the account level (managed outside this module).
+resource "aws_eks_access_entry" "admin" {
+  for_each = toset(var.admin_iam_principals)
+
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = each.value
+  type          = "STANDARD"
+  tags          = var.tags
+}
+
+resource "aws_eks_access_policy_association" "admin" {
+  for_each = toset(var.admin_iam_principals)
+
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = each.value
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.admin]
 }
 
 # Launch template for the managed node group. Enforces IMDSv2 (token-required)

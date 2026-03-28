@@ -22,6 +22,8 @@ module "eks_cluster" {
   # Scope the node role's CloudWatch Logs read policy to the specific log group
   # created by the network stack for VPC flow logs. The wildcard default would
   # allow the node role to read any log group in the account.
+  admin_iam_principals = var.admin_iam_principals
+
   cloudwatch_log_group_arns = [
     "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vpc-flow-logs/${var.cluster_name}",
     "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vpc-flow-logs/${var.cluster_name}:*",
