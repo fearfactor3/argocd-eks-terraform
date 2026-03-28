@@ -24,13 +24,13 @@ locals {
   # Terraform interpolates var.eks_cluster_name and var.aws_region here;
   # the ${...} syntax inside the heredoc belongs to Terraform, not Alloy.
   alloy_config = <<-EOT
-    loki.source.cloudwatch "vpc_flow_logs" {
+    loki.source.awscloudwatch "vpc_flow_logs" {
       log_groups {
         names = ["/aws/vpc-flow-logs/${var.eks_cluster_name}"]
       }
       region        = "${var.aws_region}"
       poll_interval = "1m"
-      forward_to    = [loki.write.default.receiver]
+      forward_to = [loki.write.default.receiver]
     }
 
     loki.write "default" {
