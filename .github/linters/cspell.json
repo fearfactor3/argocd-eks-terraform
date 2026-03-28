@@ -38,7 +38,9 @@
     "homelab",
     "clustersecretstore",
     "externalsecret",
-    "creds"
+    "creds",
+    "ltrimstr",
+    "rtrimstr"
   ],
   "overrides": [
     {

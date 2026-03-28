@@ -151,11 +151,12 @@ make help          # List all targets
 make init          # tofu init for all stacks
 make validate      # tofu validate for all stacks
 make fmt           # tofu fmt -recursive
-make plan-network  # Plan the network stack
-make plan-eks      # Plan the eks stack
-make plan-argo-cd  # Plan the argo-cd stack
-make plan-prometheus # Plan the prometheus stack
-make clean         # Remove all .terraform dirs and lock files
+make lint          # All static checks (fmt-check, tflint, policies, markdownlint)
+make test          # Full local CI (lint + module tests + policy tests)
+make plan-dev      # Plan all environment stacks with dev.tfvars
+make plan-prod     # Plan all environment stacks with prod.tfvars
+make plan-spacelift # Plan the Spacelift management stack
+make clean         # Remove .terraform plugin cache directories
 ```
 
 To target a specific stack directly:
