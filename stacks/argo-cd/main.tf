@@ -215,28 +215,27 @@ resource "helm_release" "argocd_projects" {
         additionalLabels = {
           environment = var.environment
         }
-        spec = {
-          description = "Platform applications for the ${var.environment} cluster"
-          # Set var.argocd_source_repo to your app repository URL.
-          # See docs/runbooks/connect-app-repo.md for the full procedure.
-          sourceRepos = [var.argocd_source_repo]
-          destinations = [
-            {
-              # In-cluster only — prevents Applications from targeting external clusters.
-              server    = "https://kubernetes.default.svc"
-              namespace = "*"
-            }
-          ]
-          # Allow ArgoCD to manage cluster-scoped resources (Namespaces, CRDs, ClusterRoles).
-          # Restrict to the explicit list once the workload set is stable.
-          clusterResourceWhitelist = [
-            { group = "*", kind = "*" }
-          ]
-          orphanedResources = {
-            # Warn (not fail) when resources exist in the cluster that are not
-            # tracked by any Application in this project.
-            warn = true
+        # argocd-apps v2.x maps these fields directly to AppProject spec — no "spec" wrapper.
+        description = "Platform applications for the ${var.environment} cluster"
+        # Set var.argocd_source_repo to your app repository URL.
+        # See docs/runbooks/connect-app-repo.md for the full procedure.
+        sourceRepos = [var.argocd_source_repo]
+        destinations = [
+          {
+            # In-cluster only — prevents Applications from targeting external clusters.
+            server    = "https://kubernetes.default.svc"
+            namespace = "*"
           }
+        ]
+        # Allow ArgoCD to manage cluster-scoped resources (Namespaces, CRDs, ClusterRoles).
+        # Restrict to the explicit list once the workload set is stable.
+        clusterResourceWhitelist = [
+          { group = "*", kind = "*" }
+        ]
+        orphanedResources = {
+          # Warn (not fail) when resources exist in the cluster that are not
+          # tracked by any Application in this project.
+          warn = true
         }
       }
     }
