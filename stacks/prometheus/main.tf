@@ -7,10 +7,11 @@ resource "kubernetes_namespace_v1" "prometheus" {
   metadata {
     name = "prometheus"
     labels = {
-      # node-exporter requires hostNetwork/hostPID so enforce=restricted would
-      # block it — keep baseline enforcement. warn/audit=restricted surfaces
-      # hardening gaps in all environments without blocking pods.
-      "pod-security.kubernetes.io/enforce" = "baseline"
+      # node-exporter requires hostNetwork, hostPID, hostPath volumes, and hostPort
+      # which violate both restricted and baseline PSS. privileged enforcement is
+      # required for this namespace. warn/audit=restricted surfaces any regressions
+      # introduced by other workloads in this namespace.
+      "pod-security.kubernetes.io/enforce" = "privileged"
       "pod-security.kubernetes.io/warn"    = "restricted"
       "pod-security.kubernetes.io/audit"   = "restricted"
     }
@@ -24,13 +25,13 @@ locals {
   # Terraform interpolates var.eks_cluster_name and var.aws_region here;
   # the ${...} syntax inside the heredoc belongs to Terraform, not Alloy.
   alloy_config = <<-EOT
-    loki.source.cloudwatch "vpc_flow_logs" {
+    loki.source.awscloudwatch "vpc_flow_logs" {
       log_groups {
         names = ["/aws/vpc-flow-logs/${var.eks_cluster_name}"]
       }
       region        = "${var.aws_region}"
       poll_interval = "1m"
-      forward_to    = [loki.write.default.receiver]
+      forward_to = [loki.write.default.receiver]
     }
 
     loki.write "default" {
