@@ -36,7 +36,7 @@ All checks must pass before merging.
 | Target | What it does |
 | ------ | ------------ |
 | `make lint` | fmt-check + tflint + policy format + markdownlint (no init required) |
-| `make check` | All of `lint` plus module tests and policy unit tests |
+| `make test` | All of `lint` plus module tests and policy unit tests |
 | `make plan-dev` | Plan all environment stacks with dev.tfvars |
 | `make plan-prod` | Plan all environment stacks with prod.tfvars |
 | `make plan-spacelift` | Plan the Spacelift management stack |

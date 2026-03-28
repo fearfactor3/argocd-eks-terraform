@@ -19,6 +19,16 @@ variable "repository" {
   type        = string
 }
 
+variable "github_org" {
+  description = "GitHub organisation or user that owns the repository — injected into the iam stack to scope the OIDC trust policy"
+  type        = string
+}
+
+variable "github_oidc_thumbprint" {
+  description = "SHA-1 thumbprint of the GitHub Actions OIDC TLS certificate — injected into the iam stack"
+  type        = string
+}
+
 variable "branch" {
   description = "Git branch to track"
   type        = string
@@ -73,6 +83,9 @@ variable "environments" {
     # and restores it each morning (08:00 UTC), saving ~70% of overnight EC2 cost.
     enable_scheduled_scaling = bool
     autodeploy               = bool
+    # public_access_cidrs restricts which IPs may reach the EKS public API endpoint.
+    # Use ["0.0.0.0/0"] for open access; tighten to known office/VPN CIDRs for prod.
+    public_access_cidrs = list(string)
 
     # ArgoCD
     # argocd_resource_profile controls pod resource requests/limits:
@@ -107,6 +120,7 @@ variable "environments" {
       node_capacity_type       = "SPOT"
       enable_scheduled_scaling = true
       autodeploy               = true
+      public_access_cidrs      = ["0.0.0.0/0"]
 
       argocd_resource_profile = "small"
       argocd_source_repo      = "*"
@@ -127,6 +141,7 @@ variable "environments" {
       node_capacity_type       = "ON_DEMAND"
       enable_scheduled_scaling = false
       autodeploy               = false
+      public_access_cidrs      = ["0.0.0.0/0"]
 
       argocd_resource_profile = "standard"
       argocd_source_repo      = "*"

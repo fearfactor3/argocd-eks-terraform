@@ -135,6 +135,11 @@ jobs:
     # Uses mock_provider so no AWS credentials are required — zero cost.
     # Runs independently of fmt/validate because module tests exercise logic
     # that validate alone does not cover (assertions on resource attributes).
+    #
+    # NOTE: This job intentionally calls `tofu` directly instead of `make test-modules`.
+    # CI needs a separate `init -backend=false` step before each test run, which the
+    # Makefile target does not support (it omits -backend=false for local use where
+    # Spacelift injects the backend). Keeping them separate avoids a flag mismatch.
     needs: [fmt]
     runs-on: ubuntu-latest
     steps:

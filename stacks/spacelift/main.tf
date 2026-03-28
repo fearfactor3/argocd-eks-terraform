@@ -90,6 +90,21 @@ resource "spacelift_aws_integration_attachment" "iam" {
   depends_on = [time_sleep.iam_propagation]
 }
 
+# Variables injected into the IAM stack — not per-environment so managed separately
+# from stack_env_vars which only targets spacelift_stack.env stacks.
+resource "spacelift_environment_variable" "iam_config" {
+  for_each = {
+    TF_VAR_github_org             = { value = var.github_org, write_only = false }
+    TF_VAR_github_repo            = { value = var.repository, write_only = false }
+    TF_VAR_github_oidc_thumbprint = { value = var.github_oidc_thumbprint, write_only = true }
+  }
+
+  stack_id   = spacelift_stack.iam.id
+  name       = each.key
+  value      = each.value.value
+  write_only = each.value.write_only
+}
+
 locals {
   env_stack_types = {
     network = {
@@ -142,6 +157,7 @@ locals {
       "eks-${env}/TF_VAR_node_group_min_capacity"     = { stack = "eks-${env}", name = "TF_VAR_node_group_min_capacity", value = tostring(cfg.node_min), write_only = false }
       "eks-${env}/TF_VAR_node_capacity_type"          = { stack = "eks-${env}", name = "TF_VAR_node_capacity_type", value = cfg.node_capacity_type, write_only = false }
       "eks-${env}/TF_VAR_enable_scheduled_scaling"    = { stack = "eks-${env}", name = "TF_VAR_enable_scheduled_scaling", value = tostring(cfg.enable_scheduled_scaling), write_only = false }
+      "eks-${env}/TF_VAR_public_access_cidrs"         = { stack = "eks-${env}", name = "TF_VAR_public_access_cidrs", value = jsonencode(cfg.public_access_cidrs), write_only = false }
       "eks-addons-${env}/TF_VAR_environment"          = { stack = "eks-addons-${env}", name = "TF_VAR_environment", value = env, write_only = false }
       "argo-cd-${env}/TF_VAR_environment"             = { stack = "argo-cd-${env}", name = "TF_VAR_environment", value = env, write_only = false }
       "argo-cd-${env}/TF_VAR_argocd_resource_profile" = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_resource_profile", value = cfg.argocd_resource_profile, write_only = false }
@@ -169,6 +185,8 @@ resource "spacelift_stack" "iam" {
   terraform_workflow_tool = "OPEN_TOFU"
   terraform_version       = var.opentofu_version
   autodeploy              = var.autodeploy
+
+  labels = ["component:iam", "managed-by:opentofu"]
 }
 
 # App stacks — one per environment per stack type
@@ -185,6 +203,12 @@ resource "spacelift_stack" "env" {
   terraform_workflow_tool = "OPEN_TOFU"
   terraform_version       = var.opentofu_version
   autodeploy              = var.environments[each.value.env].autodeploy
+
+  labels = [
+    "env:${each.value.env}",
+    "component:${each.value.stack_type}",
+    "managed-by:opentofu",
+  ]
 }
 
 # Per-environment variables injected into stacks
