@@ -110,22 +110,30 @@ locals {
     network = {
       description  = "VPC, subnets, and networking infrastructure"
       project_root = "stacks/network"
+      # Also watch the network module — changes there affect this stack
+      # but fall outside project_root so Spacelift wouldn't detect them otherwise.
+      extra_globs = ["modules/network/**/*"]
     }
     eks = {
       description  = "EKS cluster, node group, IAM, and add-ons"
       project_root = "stacks/eks"
+      # Also watch the eks module — changes there affect this stack.
+      extra_globs = ["modules/eks/**/*"]
     }
     eks-addons = {
       description  = "AWS Load Balancer Controller and other cluster-level Helm add-ons"
       project_root = "stacks/eks-addons"
+      extra_globs  = []
     }
     argo-cd = {
       description  = "ArgoCD GitOps engine Helm release"
       project_root = "stacks/argo-cd"
+      extra_globs  = []
     }
     prometheus = {
       description  = "Prometheus and Grafana monitoring stack Helm releases"
       project_root = "stacks/prometheus"
+      extra_globs  = []
     }
   }
 
@@ -137,6 +145,7 @@ locals {
       stack_type   = pair[1]
       description  = "${local.env_stack_types[pair[1]].description} (${pair[0]})"
       project_root = local.env_stack_types[pair[1]].project_root
+      extra_globs  = local.env_stack_types[pair[1]].extra_globs
     }
   }
 
@@ -193,12 +202,13 @@ resource "spacelift_stack" "iam" {
 resource "spacelift_stack" "env" {
   for_each = local.env_stacks
 
-  name         = each.key
-  description  = each.value.description
-  repository   = var.repository
-  branch       = var.branch
-  project_root = each.value.project_root
-  space_id     = var.spacelift_space_id
+  name                     = each.key
+  description              = each.value.description
+  repository               = var.repository
+  branch                   = var.branch
+  project_root             = each.value.project_root
+  additional_project_globs = each.value.extra_globs
+  space_id                 = var.spacelift_space_id
 
   terraform_workflow_tool = "OPEN_TOFU"
   terraform_version       = var.opentofu_version
