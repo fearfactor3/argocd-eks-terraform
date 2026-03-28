@@ -25,12 +25,28 @@ locals {
   # Terraform interpolates var.eks_cluster_name and var.aws_region here;
   # the ${...} syntax inside the heredoc belongs to Terraform, not Alloy.
   alloy_config = <<-EOT
-    loki.source.awscloudwatch "vpc_flow_logs" {
-      log_groups {
-        names = ["/aws/vpc-flow-logs/${var.eks_cluster_name}"]
+    // Read VPC flow logs from CloudWatch and forward to Loki via the OTel pipeline.
+    // otelcol.receiver.awscloudwatch is the correct Alloy component for CloudWatch —
+    // there is no loki.source.cloudwatch in Alloy (that was a Grafana Agent component).
+    otelcol.receiver.awscloudwatch "vpc_flow_logs" {
+      region = "${var.aws_region}"
+
+      logs {
+        poll_interval = "1m"
+
+        groups {
+          named {
+            group_name = "/aws/vpc-flow-logs/${var.eks_cluster_name}"
+          }
+        }
       }
-      region        = "${var.aws_region}"
-      poll_interval = "1m"
+
+      output {
+        logs = [otelcol.exporter.loki.default.input]
+      }
+    }
+
+    otelcol.exporter.loki "default" {
       forward_to = [loki.write.default.receiver]
     }
 
