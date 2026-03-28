@@ -25,6 +25,10 @@ resource "helm_release" "cluster_autoscaler" {
   namespace        = "kube-system"
   create_namespace = false
 
+  # Must wait for the LB controller webhook to be ready — installing before it
+  # is up causes Service mutation calls to fail with "no endpoints available".
+  depends_on = [helm_release.aws_lb_controller]
+
   values = [yamlencode({
     autoDiscovery = {
       clusterName = var.eks_cluster_name
@@ -62,6 +66,10 @@ resource "helm_release" "external_secrets" {
   version          = var.external_secrets_chart_version
   namespace        = "external-secrets"
   create_namespace = true
+
+  # Must wait for the LB controller webhook to be ready — installing before it
+  # is up causes Service mutation calls to fail with "no endpoints available".
+  depends_on = [helm_release.aws_lb_controller]
 
   values = [yamlencode({
     serviceAccount = {
