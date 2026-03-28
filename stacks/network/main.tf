@@ -14,14 +14,15 @@ locals {
 }
 
 module "network" {
-  source                 = "../../modules/network"
-  vpc_cidr               = var.vpc_cidr
-  public_subnets         = var.public_subnets
-  private_subnets        = var.private_subnets
-  azs                    = local.azs
-  project_name           = var.project_name
-  environment            = var.environment
-  cluster_name           = var.cluster_name
-  flow_logs_traffic_type = var.flow_logs_traffic_type
-  tags                   = var.tags
+  source                   = "../../modules/network"
+  vpc_cidr                 = var.vpc_cidr
+  public_subnets           = var.public_subnets
+  private_subnets          = var.private_subnets
+  azs                      = local.azs
+  project_name             = var.project_name
+  environment              = var.environment
+  cluster_name             = var.cluster_name
+  flow_logs_traffic_type   = var.flow_logs_traffic_type
+  flow_logs_retention_days = var.flow_logs_retention_days
+  tags                     = var.tags
 }

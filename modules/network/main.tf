@@ -145,10 +145,8 @@ resource "aws_route_table_association" "private" {
 #   REJECT — rejected only (~60-80% less volume, reduces CloudWatch ingestion cost in dev)
 # Grafana Alloy reads from this log group and forwards records to Loki.
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name = "/aws/vpc-flow-logs/${var.cluster_name}"
-  # 7-day retention — appropriate for a test instance. Increase for compliance
-  # or long-term trend analysis.
-  retention_in_days = 7
+  name              = "/aws/vpc-flow-logs/${var.cluster_name}"
+  retention_in_days = var.flow_logs_retention_days
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-vpc-flow-logs"

@@ -99,6 +99,9 @@ resource "helm_release" "aws_lb_controller" {
 
   values = [yamlencode({
     clusterName = var.eks_cluster_name
+    # Explicit VPC ID prevents the controller from querying EC2 instance metadata
+    # to discover the VPC — IMDSv2 hop_limit=1 blocks pod-level IMDS access.
+    vpcId = var.vpc_id
     serviceAccount = {
       create = true
       name   = "aws-load-balancer-controller"

@@ -19,6 +19,11 @@ output "cluster_ca_certificate" {
   sensitive   = true
 }
 
+output "vpc_id" {
+  description = "VPC ID the EKS cluster is deployed in — consumed by the eks-addons stack for the LB controller"
+  value       = module.eks_cluster.vpc_id
+}
+
 output "aws_lb_controller_role_arn" {
   description = "IAM role ARN for the AWS Load Balancer Controller — consumed by the eks-addons stack"
   value       = module.eks_cluster.aws_lb_controller_role_arn

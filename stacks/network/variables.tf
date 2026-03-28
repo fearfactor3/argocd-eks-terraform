@@ -77,3 +77,14 @@ variable "flow_logs_traffic_type" {
     error_message = "flow_logs_traffic_type must be \"ALL\", \"ACCEPT\", or \"REJECT\"."
   }
 }
+
+variable "flow_logs_retention_days" {
+  description = "Retention period in days for the VPC flow logs CloudWatch log group. Use 7 for dev; increase for compliance or long-term trend analysis."
+  type        = number
+  default     = 7
+
+  validation {
+    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.flow_logs_retention_days)
+    error_message = "flow_logs_retention_days must be a valid CloudWatch retention period."
+  }
+}

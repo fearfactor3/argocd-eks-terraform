@@ -67,7 +67,8 @@ variable "environments" {
     private_subnets = list(string)
     # flow_logs_traffic_type: REJECT for dev reduces CloudWatch ingestion ~60-80%;
     # ALL for prod ensures full visibility into accepted + rejected traffic.
-    flow_logs_traffic_type = string
+    flow_logs_traffic_type   = string
+    flow_logs_retention_days = number
 
     # EKS
     cluster_name        = string
@@ -112,6 +113,7 @@ variable "environments" {
       public_subnets           = ["10.0.1.0/24", "10.0.2.0/24"]
       private_subnets          = ["10.0.3.0/24", "10.0.4.0/24"]
       flow_logs_traffic_type   = "REJECT"
+      flow_logs_retention_days = 7
       cluster_name             = "argocd-dev"
       node_instance_types      = ["t3.medium"]
       node_desired             = 1
@@ -133,6 +135,7 @@ variable "environments" {
       public_subnets           = ["10.1.1.0/24", "10.1.2.0/24"]
       private_subnets          = ["10.1.3.0/24", "10.1.4.0/24"]
       flow_logs_traffic_type   = "ALL"
+      flow_logs_retention_days = 30
       cluster_name             = "argocd-prod"
       node_instance_types      = ["t3.large"]
       node_desired             = 3
