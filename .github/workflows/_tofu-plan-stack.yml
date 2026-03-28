@@ -139,10 +139,11 @@ jobs:
           # Map all Spacelift outputs to TF_VAR_* env vars in one pass.
           # - private_subnet_ids → subnet_ids to match the TF variable name.
           # - Strip surrounding JSON-encoded quotes Spacelift adds to string values.
-          # - Skip empty values so stub values from the previous step are preserved.
+          # - Skip null and empty values so stub values from the previous step are preserved.
           # OpenTofu silently ignores TF_VAR_* that have no matching variable.
           echo "$OUTPUTS" | jq -r '
             .[] |
+            select(.value != null) |
             (if .id == "private_subnet_ids" then "subnet_ids" else .id end) as $var |
             (.value | ltrimstr("\"") | rtrimstr("\"")) as $val |
             select($val != "") |
