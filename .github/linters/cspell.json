@@ -40,7 +40,9 @@
     "externalsecret",
     "creds",
     "ltrimstr",
-    "rtrimstr"
+    "rtrimstr",
+    "commitlint",
+    "amannn"
   ],
   "overrides": [
     {
