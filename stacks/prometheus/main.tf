@@ -254,6 +254,9 @@ resource "helm_release" "alloy" {
       configMap = {
         content = local.alloy_config
       }
+      # otelcol.receiver.awscloudwatch is experimental — enable experimental
+      # stability level so Alloy loads the component without rejecting it.
+      extraArgs = ["--stability.level=experimental"]
     }
     # Deploy as a single Deployment replica rather than the chart's default
     # DaemonSet. DaemonSet is appropriate for node-local log collection
