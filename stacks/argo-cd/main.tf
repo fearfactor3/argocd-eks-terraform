@@ -62,6 +62,28 @@ resource "kubernetes_namespace_v1" "argocd" {
   }
 }
 
+# argocd-secret must exist before the Helm release starts. The chart's built-in
+# hook job that normally generates server.secretkey runs as a pod and is blocked
+# by the restricted Pod Security Standard on this namespace. Pre-creating the
+# secret here removes that dependency and keeps enforce=restricted in place.
+resource "random_password" "argocd_secret_key" {
+  length  = 32
+  special = false
+}
+
+resource "kubernetes_secret_v1" "argocd_secret" {
+  metadata {
+    name      = "argocd-secret"
+    namespace = kubernetes_namespace_v1.argocd.metadata[0].name
+  }
+
+  data = {
+    "server.secretkey" = random_password.argocd_secret_key.result
+  }
+
+  depends_on = [kubernetes_namespace_v1.argocd]
+}
+
 # Argo CD is deployed as a GitOps engine — it watches a Git repository and
 # continuously reconciles the cluster state to match what is declared there.
 # The server is exposed via an NLB so the UI and CLI (argocd login) are
@@ -74,6 +96,8 @@ module "argo_cd" {
   chart_version    = var.argocd_chart_version
   namespace        = kubernetes_namespace_v1.argocd.metadata[0].name
   create_namespace = false
+
+  depends_on = [kubernetes_secret_v1.argocd_secret]
 
   values = [yamlencode({
     global = {

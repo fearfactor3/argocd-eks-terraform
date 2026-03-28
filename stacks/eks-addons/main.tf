@@ -35,11 +35,13 @@ resource "helm_release" "cluster_autoscaler" {
       clusterName = var.eks_cluster_name
     }
     awsRegion = var.aws_region
-    serviceAccount = {
-      create = true
-      name   = "cluster-autoscaler"
-      annotations = {
-        "eks.amazonaws.com/role-arn" = var.cluster_autoscaler_role_arn
+    rbac = {
+      serviceAccount = {
+        create = true
+        name   = "cluster-autoscaler"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = var.cluster_autoscaler_role_arn
+        }
       }
     }
     extraArgs = {
