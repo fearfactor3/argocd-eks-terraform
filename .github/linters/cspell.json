@@ -42,7 +42,9 @@
     "ltrimstr",
     "rtrimstr",
     "commitlint",
-    "amannn"
+    "amannn",
+    "awscloudwatch",
+    "otelcol"
   ],
   "overrides": [
     {
