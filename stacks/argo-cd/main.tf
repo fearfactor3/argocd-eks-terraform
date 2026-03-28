@@ -75,6 +75,16 @@ resource "kubernetes_secret_v1" "argocd_secret" {
   metadata {
     name      = "argocd-secret"
     namespace = kubernetes_namespace_v1.argocd.metadata[0].name
+    # Helm ownership labels/annotations are required so the ArgoCD chart can
+    # adopt this pre-created secret rather than failing with "invalid ownership
+    # metadata". Without these, Helm refuses to manage a secret it didn't create.
+    labels = {
+      "app.kubernetes.io/managed-by" = "Helm"
+    }
+    annotations = {
+      "meta.helm.sh/release-name"      = "argocd"
+      "meta.helm.sh/release-namespace" = kubernetes_namespace_v1.argocd.metadata[0].name
+    }
   }
 
   data = {
