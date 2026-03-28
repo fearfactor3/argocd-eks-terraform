@@ -206,9 +206,11 @@ resource "helm_release" "argocd_projects" {
   namespace  = kubernetes_namespace_v1.argocd.metadata[0].name
 
   values = [yamlencode({
-    projects = [
-      {
-        name      = "platform"
+    # argocd-apps v2.x uses a map keyed by project name, not a list.
+    # Using a list causes the chart to use the list index (0, 1, ...) as the
+    # resource name, which is a number and fails Kubernetes name validation.
+    projects = {
+      platform = {
         namespace = "argocd"
         additionalLabels = {
           environment = var.environment
@@ -237,7 +239,7 @@ resource "helm_release" "argocd_projects" {
           }
         }
       }
-    ]
+    }
   })]
 
   depends_on = [module.argo_cd]
