@@ -10,17 +10,12 @@ ENABLE_LINTERS:
   - YAML_YAMLLINT
   - JSON_JSONLINT
   - MARKDOWN_MARKDOWNLINT
-  - SPELL_CSPELL
-
-DISABLE:
-  - SPELL
 
 VALIDATE_ALL_CODEBASE: false
 FLAVOR_SUGGESTIONS: false
 FILTER_REGEX_EXCLUDE: '(megalinter-reports/|\.terraform/)'
 
 # Linter config file locations
-SPELL_CSPELL_CONFIG_FILE: .github/linters/cspell.json
 YAML_YAMLLINT_CONFIG_FILE: .github/linters/.yamllint
 MARKDOWN_MARKDOWNLINT_CONFIG_FILE: .github/linters/.markdownlint.json
 
