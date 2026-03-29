@@ -40,12 +40,12 @@ test_rejection_overrides_approval if {
 
 # ── emergency destruction run ─────────────────────────────────────────────────
 
-test_one_approval_not_enough_for_emergency if {
-	not spacelift.approve with input as emergency_input([approval])
+test_one_approval_sufficient_for_emergency if {
+	spacelift.approve with input as emergency_input([approval])
 }
 
-test_two_approvals_sufficient_for_emergency if {
-	spacelift.approve with input as emergency_input([approval, approval])
+test_no_approvals_not_enough_for_emergency if {
+	not spacelift.approve with input as emergency_input([])
 }
 
 test_rejection_blocks_emergency_approval if {

@@ -26,6 +26,7 @@
     "kubeconform",
     "kubeseal",
     "misconfig",
+    "misconfigs",
     "tflintignore",
     "rtype",
     "apiserver",

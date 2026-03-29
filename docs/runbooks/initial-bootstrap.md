@@ -194,7 +194,7 @@ kubectl get pods -n kube-system | grep ebs-csi
 # Expect: ebs-csi-controller Running
 
 # Verify Alloy is shipping flow logs to Loki
-# Open Grafana → Explore → Loki datasource → query {job="loki.source.cloudwatch"}
+# Open Grafana → Explore → Loki datasource → query {exporter="OTLP"}
 # Expect: flow log entries appearing within ~2 minutes
 ```
 
@@ -230,60 +230,9 @@ Prod stacks do not autodeploy. Each requires a manual approval in the Spacelift 
 
 ---
 
-## Rollback Procedure
+## Troubleshooting
 
-### When to rollback
-
-- Any stack stuck in `Failed` for more than 10 minutes with no progress
-- `kubectl get nodes` shows `NotReady` after 25 minutes
-- ArgoCD or Prometheus pods not reaching `Running` after 10 minutes
-
-### How to rollback
-
-Destroy in reverse dependency order:
-
-```bash
-# Via Spacelift Tasks (preferred) — reverse dependency order
-# Trigger a destroy task on each stack in sequence
-spacectl stack task --id prometheus-dev    -- tofu destroy -auto-approve
-spacectl stack task --id argo-cd-dev      -- tofu destroy -auto-approve
-spacectl stack task --id eks-addons-dev   -- tofu destroy -auto-approve
-spacectl stack task --id eks-dev          -- tofu destroy -auto-approve
-spacectl stack task --id network-dev      -- tofu destroy -auto-approve
-```
-
-Or directly with OpenTofu (requires local state):
-
-```bash
-cd stacks/prometheus  && tofu destroy
-cd stacks/argo-cd     && tofu destroy
-cd stacks/eks-addons  && tofu destroy
-cd stacks/eks         && tofu destroy
-cd stacks/network     && tofu destroy
-```
-
-> **Note:** EKS cluster deletion takes ~10 minutes. KMS keys have a 7-day deletion window after `tofu destroy` — this is by design and cannot be shortened.
-
----
-
-## Contingency: EKS Creation Fails Mid-Apply
-
-**Symptom:** `eks-dev` stack fails after 15+ minutes with a control plane error.
-
-**Cause:** Usually one of:
-
-1. IAM role propagation delay — EKS rejects the cluster role within the first ~15 seconds of creation
-2. Subnet tag missing — VPC-CNI cannot discover the correct subnets
-3. KMS key policy not yet propagated
-
-**Response:**
-
-1. Do **not** re-trigger immediately — the cluster may be in a partial state
-2. Check AWS Console → EKS → Clusters for the cluster status and error message
-3. If status is `FAILED`, run `tofu destroy` on the eks stack to clean it up
-4. Resolve the root cause, then re-apply
-
-**IAM propagation** is the most common cause. A re-apply usually succeeds on the second attempt without any code changes.
+If a stack fails during any phase, see [bootstrap-troubleshooting.md](bootstrap-troubleshooting.md) for common failure patterns, rollback procedure, and EKS creation contingencies.
 
 ---
 

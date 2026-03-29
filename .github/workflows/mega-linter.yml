@@ -43,5 +43,5 @@ jobs:
         uses: github/codeql-action/upload-sarif@cb06a0a8527b2c6970741b3a0baa15231dc74a4c # v4.34.1
         if: always()
         with:
-          sarif_file: megalinter-reports/sarif
+          sarif_file: megalinter-reports/megalinter-report.sarif
           category: megalinter
