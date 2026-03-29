@@ -83,17 +83,17 @@ resource "kubernetes_storage_class_v1" "gp3" {
 }
 
 # kube-prometheus-stack bundles Prometheus, Alertmanager, and Grafana into a
-# single chart. Grafana is exposed via an NLB and backed by a persistent volume
-# so dashboards survive pod restarts. The Loki datasource is pre-provisioned so
-# no manual Grafana UI step is required after deployment.
-module "prometheus" {
-  source           = "../../modules/prometheus"
-  release_name     = "prometheus"
-  helm_repo_url    = "https://prometheus-community.github.io/helm-charts"
-  chart_name       = "kube-prometheus-stack"
-  chart_version    = var.prometheus_chart_version
+# single chart. Grafana is exposed via an ALB Ingress and backed by a persistent
+# volume so dashboards survive pod restarts. The Loki datasource is pre-provisioned
+# so no manual Grafana UI step is required after deployment.
+resource "helm_release" "prometheus" {
+  name             = "prometheus"
+  repository       = "https://prometheus-community.github.io/helm-charts"
+  chart            = "kube-prometheus-stack"
+  version          = var.prometheus_chart_version
   namespace        = kubernetes_namespace_v1.prometheus.metadata[0].name
   create_namespace = false
+  timeout          = 2000
 
   values = [yamlencode({
     commonLabels = {
@@ -161,6 +161,13 @@ module "prometheus" {
   })]
 
   depends_on = [kubernetes_storage_class_v1.gp3]
+}
+
+data "kubernetes_service_v1" "grafana" {
+  metadata {
+    name      = "prometheus-grafana"
+    namespace = helm_release.prometheus.namespace
+  }
 }
 
 # Loki in SingleBinary mode runs all components (ingester, querier, distributor,

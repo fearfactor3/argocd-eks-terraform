@@ -81,6 +81,7 @@ jobs:
           - network
           - eks
           - eks-addons
+          - kyverno
           - argo-cd
           - prometheus
           - spacelift

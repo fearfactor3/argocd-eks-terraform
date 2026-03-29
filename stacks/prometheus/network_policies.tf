@@ -173,6 +173,39 @@ resource "kubernetes_network_policy_v1" "prometheus_allow_node_scrape" {
   }
 }
 
+# Prometheus scrapes Kyverno controller metrics on port 8000.
+resource "kubernetes_network_policy_v1" "prometheus_allow_kyverno_scrape" {
+  metadata {
+    name      = "allow-kyverno-scrape-egress"
+    namespace = kubernetes_namespace_v1.prometheus.metadata[0].name
+  }
+
+  spec {
+    pod_selector {
+      match_labels = {
+        "app.kubernetes.io/name" = "prometheus"
+      }
+    }
+
+    policy_types = ["Egress"]
+
+    egress {
+      to {
+        namespace_selector {
+          match_labels = {
+            "kubernetes.io/metadata.name" = "kyverno"
+          }
+        }
+      }
+
+      ports {
+        port     = "8000"
+        protocol = "TCP"
+      }
+    }
+  }
+}
+
 # Prometheus scrapes ArgoCD component metrics across namespaces.
 resource "kubernetes_network_policy_v1" "prometheus_allow_argocd_scrape" {
   metadata {

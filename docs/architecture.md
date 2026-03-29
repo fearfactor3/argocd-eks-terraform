@@ -17,11 +17,11 @@ The design follows three principles:
 ```text
 iam  (shared, deployed once per AWS account)
 
-network-dev ──► eks-dev ──► eks-addons-dev ──► argo-cd-dev
-                                            └─► prometheus-dev
+network-dev ──► eks-dev ──► eks-addons-dev ──► kyverno-dev ──► argo-cd-dev
+                                                            └─► prometheus-dev
 
-network-prod ──► eks-prod ──► eks-addons-prod ──► argo-cd-prod
-                                              └─► prometheus-prod
+network-prod ──► eks-prod ──► eks-addons-prod ──► kyverno-prod ──► argo-cd-prod
+                                                              └─► prometheus-prod
 
 spacelift  (meta-stack — manages all stacks above as code)
 ```
@@ -74,6 +74,26 @@ Deploys cluster-level add-ons that must be running before application stacks can
 | `aws-load-balancer-controller` | Watches `Ingress` resources and provisions ALBs on AWS. Runs with an IRSA role scoped to `aws-load-balancer-controller` in `kube-system`. |
 
 This stack also re-exports the EKS cluster credentials (`eks_cluster_name`, `eks_cluster_endpoint`, `cluster_ca_certificate`) as outputs so downstream stacks receive them via the `eks-addons` dependency rather than directly from `eks`.
+
+### Kyverno stack (per environment)
+
+Deploys the Kyverno admission controller and `kyverno-policies` Helm releases into the `kyverno` namespace (PSS `restricted` enforced).
+
+Kyverno sits between `eks-addons` and `{argo-cd, prometheus}` so the admission webhook is guaranteed live before any application pods are scheduled.
+
+| Release | Chart | Purpose |
+| --- | --- | --- |
+| `kyverno` | kyverno/kyverno | Admission controller, background controller, cleanup controller, reports controller. dev=1 replica, prod=3 replicas. |
+| `kyverno-policies` | kyverno/kyverno-policies | `podSecurity` and `bestPractices` ClusterPolicy groups. All policies run in `Audit` mode — violations reported, nothing blocked. |
+
+**Policy groups enabled:**
+
+- `podSecurity` — mirrors PSS restricted profile: disallow-host-namespaces, disallow-privileged-containers, restrict-seccomp, require-run-as-nonroot, etc.
+- `bestPractices` — disallow-latest-tag, require-pod-requests-limits, require-labels
+
+**Known expected violations**: node-exporter in the `prometheus` namespace requires privileged capabilities and will generate Audit violations. These are non-blocking. A `PolicyException` should be created before promoting those policies to Enforce.
+
+This stack also re-exports cluster credentials as pass-through outputs so `argo-cd` and `prometheus` receive them through the kyverno dependency.
 
 ### Argo CD stack (per environment)
 
@@ -239,6 +259,7 @@ Pull request opened / updated
   │     ├── plan network-dev, network-prod
   │     ├── plan eks-dev, eks-prod
   │     ├── plan eks-addons-dev, eks-addons-prod
+  │     ├── plan kyverno-dev, kyverno-prod
   │     ├── plan argo-cd-dev, argo-cd-prod
   │     ├── plan prometheus-dev, prometheus-prod
   │     └── aggregate results → PR comment

@@ -36,7 +36,7 @@ rules:
   scope-enum:
     - 2
     - always
-    - [network, eks, eks-addons, argo-cd, prometheus, iam, spacelift, ci, deps, docs, modules, stacks]
+    - [network, eks, eks-addons, argo-cd, prometheus, iam, spacelift, ci, deps, docs, modules, stacks, kyverno]
 
   scope-empty:
     - 2

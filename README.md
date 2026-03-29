@@ -10,6 +10,7 @@ This repository contains OpenTofu configurations to provision an Amazon EKS clus
 - **EKS cluster** (v1.32) with managed node groups deployed on private subnets
 - **EKS managed add-ons**: vpc-cni, coredns, kube-proxy, aws-ebs-csi-driver
 - **KMS encryption** for EKS secrets at rest
+- **Kyverno** policy engine with pod security and best-practice ClusterPolicies (all Audit mode)
 - **Argo CD** deployed via Helm for GitOps workflows
 - **kube-prometheus-stack** (Prometheus + Grafana + Alertmanager) deployed via Helm for observability
 - **Loki + Grafana Alloy** for log aggregation — VPC flow logs ship CloudWatch → Alloy → Loki → Grafana
@@ -32,17 +33,16 @@ See [docs/architecture.md](docs/architecture.md) for the full system design, com
 │   │   └── validate.yml          # fmt, validate, tflint, Rego policy tests
 │   └── renovate.json         # Renovate dependency update configuration
 ├── modules/                  # Reusable OpenTofu modules
-│   ├── argo-cd/              # Argo CD Helm release
 │   ├── eks/                  # EKS cluster, node group, IAM roles, add-ons
-│   ├── network/              # VPC, subnets, IGW, NAT Gateway, route tables
-│   └── prometheus/           # kube-prometheus-stack Helm release
+│   └── network/              # VPC, subnets, IGW, NAT Gateway, route tables
 ├── stacks/                   # Spacelift stacks (each deployed independently)
 │   ├── iam/                  # GitHub Actions OIDC provider + plan role
 │   ├── network/              # Deploys the network module
 │   ├── eks/                  # Deploys the eks module (depends on network)
 │   ├── eks-addons/           # AWS Load Balancer Controller (depends on eks)
-│   ├── argo-cd/              # Deploys Argo CD (depends on eks-addons)
-│   ├── prometheus/           # Deploys Prometheus stack (depends on eks-addons)
+│   ├── kyverno/              # Kyverno policy engine (depends on eks-addons)
+│   ├── argo-cd/              # Deploys Argo CD (depends on kyverno)
+│   ├── prometheus/           # Deploys Prometheus stack (depends on kyverno)
 │   └── spacelift/            # Spacelift stack definitions (meta-stack)
 ├── docs/                     # Additional documentation
 │   ├── architecture.md       # System design, components, security model, observability pipeline
@@ -100,6 +100,8 @@ See [docs/setup.md](docs/setup.md) for full installation instructions.
 | coredns Add-on | v1.11.4-eksbuild.2 |
 | kube-proxy Add-on | v1.32.6-eksbuild.12 |
 | aws-ebs-csi-driver Add-on | v1.56.0-eksbuild.1 |
+| Kyverno Helm Chart | 3.3.7 |
+| kyverno-policies Helm Chart | 3.3.4 |
 | Argo CD Helm Chart | 9.4.1 (App v3.3.0) |
 | kube-prometheus-stack Chart | 81.5.0 (Operator v0.88.1) |
 | OPA | 1.14.1 |
@@ -111,11 +113,11 @@ Stacks have explicit dependencies managed by Spacelift. Each environment (`dev`,
 ```text
 iam (shared, once per account)
 
-network-dev → eks-dev → eks-addons-dev → argo-cd-dev
-                                       → prometheus-dev
+network-dev → eks-dev → eks-addons-dev → kyverno-dev → argo-cd-dev
+                                                      → prometheus-dev
 
-network-prod → eks-prod → eks-addons-prod → argo-cd-prod
-                                          → prometheus-prod
+network-prod → eks-prod → eks-addons-prod → kyverno-prod → argo-cd-prod
+                                                          → prometheus-prod
 ```
 
 The `spacelift` stack is a meta-stack that manages all app stacks as code, including dependencies and per-environment variable injection.
@@ -236,33 +238,49 @@ Deploys cluster-level Helm add-ons that must be running before any `Ingress` res
 | `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-<env>` stack) | — injected by Spacelift |
 | `aws_lb_controller_role_arn` | IRSA role ARN for AWS Load Balancer Controller (from `eks-<env>` stack) | — injected by Spacelift |
 
+### kyverno
+
+Deploys the Kyverno admission controller and `kyverno-policies` Helm releases into the `kyverno` namespace. All policies run in `Audit` mode — violations are reported but no workloads are blocked. Enables `podSecurity` and `bestPractices` policy groups. Runs between `eks-addons` and `{argo-cd, prometheus}` so the admission webhook is live before app pods are scheduled.
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `aws_region` | AWS region | `us-east-1` |
+| `environment` | Environment name (e.g. `dev`, `prod`) | — injected by Spacelift |
+| `kyverno_chart_version` | Kyverno Helm chart version | `3.3.7` |
+| `kyverno_policies_chart_version` | kyverno-policies Helm chart version | `3.3.4` |
+| `eks_cluster_name` | EKS cluster name (from `eks-addons-<env>` stack) | — injected by Spacelift |
+| `eks_cluster_endpoint` | EKS API endpoint (from `eks-addons-<env>` stack) | — injected by Spacelift |
+| `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-addons-<env>` stack) | — injected by Spacelift |
+
+Outputs: pass-through `eks_cluster_name`, `eks_cluster_endpoint`, `cluster_ca_certificate` for downstream stacks.
+
 ### argo-cd
 
-Deploys Argo CD via Helm with an ALB Ingress. Cross-stack inputs are injected by Spacelift from the `eks-addons-<env>` stack.
+Deploys Argo CD via Helm with an ALB Ingress. Cross-stack inputs are injected by Spacelift from the `kyverno-<env>` stack.
 
 | Variable | Description | Default |
 | --- | --- | --- |
 | `aws_region` | AWS region | `us-east-1` |
 | `environment` | Environment name (e.g. `dev`, `prod`) | — injected by Spacelift |
 | `argocd_chart_version` | Argo CD Helm chart version | `9.4.1` |
-| `eks_cluster_name` | EKS cluster name (from `eks-addons-<env>` stack) | — injected by Spacelift |
-| `eks_cluster_endpoint` | EKS API endpoint (from `eks-addons-<env>` stack) | — injected by Spacelift |
-| `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-addons-<env>` stack) | — injected by Spacelift |
+| `eks_cluster_name` | EKS cluster name (from `kyverno-<env>` stack) | — injected by Spacelift |
+| `eks_cluster_endpoint` | EKS API endpoint (from `kyverno-<env>` stack) | — injected by Spacelift |
+| `cluster_ca_certificate` | Base64-encoded CA certificate (from `kyverno-<env>` stack) | — injected by Spacelift |
 
 Outputs: `argocd_release_namespace`, `argocd_server_load_balancer`, initial admin password retrieval command, kubeconfig update command.
 
 ### prometheus
 
-Deploys the kube-prometheus-stack (Prometheus, Grafana, Alertmanager) via Helm. Grafana uses an ALB Ingress; Prometheus uses a persistent volume. A `gp3` storage class is created as the cluster default. Cross-stack inputs are injected by Spacelift from the `eks-addons-<env>` stack.
+Deploys the kube-prometheus-stack (Prometheus, Grafana, Alertmanager) via Helm. Grafana uses an ALB Ingress; Prometheus uses a persistent volume. A `gp3` storage class is created as the cluster default. Cross-stack inputs are injected by Spacelift from the `kyverno-<env>` stack.
 
 | Variable | Description | Default |
 | --- | --- | --- |
 | `aws_region` | AWS region | `us-east-1` |
 | `environment` | Environment name (e.g. `dev`, `prod`) | — injected by Spacelift |
 | `prometheus_chart_version` | kube-prometheus-stack Helm chart version | `81.5.0` |
-| `eks_cluster_name` | EKS cluster name (from `eks-addons-<env>` stack) | — injected by Spacelift |
-| `eks_cluster_endpoint` | EKS API endpoint (from `eks-addons-<env>` stack) | — injected by Spacelift |
-| `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-addons-<env>` stack) | — injected by Spacelift |
+| `eks_cluster_name` | EKS cluster name (from `kyverno-<env>` stack) | — injected by Spacelift |
+| `eks_cluster_endpoint` | EKS API endpoint (from `kyverno-<env>` stack) | — injected by Spacelift |
+| `cluster_ca_certificate` | Base64-encoded CA certificate (from `kyverno-<env>` stack) | — injected by Spacelift |
 
 Outputs: `prometheus_release_namespace`, `grafana_load_balancer`, Grafana admin password retrieval command.
 
@@ -334,6 +352,7 @@ Format: `type(scope): short description`
 | `network` | VPC, subnets, NAT gateway, route tables |
 | `eks` | EKS cluster, node group, IAM roles, add-ons |
 | `eks-addons` | AWS Load Balancer Controller and cluster-level add-ons |
+| `kyverno` | Kyverno policy engine and ClusterPolicies |
 | `argo-cd` | Argo CD Helm release |
 | `prometheus` | kube-prometheus-stack Helm release |
 | `iam` | GitHub Actions OIDC provider and plan role |
@@ -360,7 +379,7 @@ refactor(modules): add required_providers blocks to all modules
 Spacelift manages destroy runs — use `spacectl` or the Spacelift UI to trigger destroy tasks in reverse dependency order:
 
 ```text
-argo-cd-dev + prometheus-dev → eks-addons-dev → eks-dev → network-dev
+argo-cd-dev + prometheus-dev → kyverno-dev → eks-addons-dev → eks-dev → network-dev
 ```
 
 For production environments, see the [Emergency: Destroying Production Infrastructure](docs/runbooks/emergency-destroy.md) runbook which covers the required approval flow and override flag.

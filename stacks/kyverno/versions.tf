@@ -1,5 +1,6 @@
+# No backend block — Spacelift injects its own state backend for all managed
+# stacks. Adding a backend block here would conflict with Spacelift's state management.
 terraform {
-  required_version = "~> 1.10"
   required_providers {
     helm = {
       source  = "hashicorp/helm"
@@ -10,4 +11,5 @@ terraform {
       version = "~> 3.0"
     }
   }
+  required_version = "~> 1.10"
 }
