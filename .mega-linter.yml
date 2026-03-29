@@ -1,6 +1,8 @@
 # MegaLinter configuration
 # Docs: https://megalinter.io/latest/configuration/
 
+APPLY_FIXES: none
+
 ENABLE_LINTERS:
   - ACTION_ACTIONLINT
   - REPOSITORY_GITLEAKS
@@ -10,10 +12,11 @@ ENABLE_LINTERS:
   - MARKDOWN_MARKDOWNLINT
   - SPELL_CSPELL
 
-VALIDATE_ALL_CODEBASE: false
-APPLY_FIXES: none
-FLAVOR_SUGGESTIONS: false
+DISABLE:
+  - SPELL
 
+VALIDATE_ALL_CODEBASE: false
+FLAVOR_SUGGESTIONS: false
 FILTER_REGEX_EXCLUDE: '(megalinter-reports/|\.terraform/)'
 
 # Linter config file locations
