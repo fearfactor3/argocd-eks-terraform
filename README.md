@@ -61,8 +61,9 @@ See [docs/architecture.md](docs/architecture.md) for the full system design, com
 │   │   ├── 008-secrets-management.md
 │   │   └── 009-tls-and-ingress.md
 │   └── runbooks/
-│       ├── initial-bootstrap.md  # First-time deployment procedure
-│       └── emergency-destroy.md  # Production destruction procedure
+│       ├── initial-bootstrap.md       # First-time deployment procedure (happy path)
+│       ├── bootstrap-troubleshooting.md  # Failure patterns, rollback, EKS contingencies
+│       └── emergency-destroy.md       # Production destruction procedure
 ├── .mega-linter.yml          # MegaLinter configuration
 ├── .pre-commit-config.yaml   # Pre-commit hooks
 ├── .regal/config.yaml        # Regal OPA linter configuration

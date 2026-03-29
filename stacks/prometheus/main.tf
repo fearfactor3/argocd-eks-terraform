@@ -1,7 +1,7 @@
 # Namespace is managed explicitly so Pod Security Standard labels are in place
-# before Helm schedules any pods. node-exporter requires hostNetwork/hostPID
-# so enforce=restricted would block it — baseline is the appropriate enforcement
-# level. warn/audit=restricted are applied unconditionally in all environments
+# before Helm schedules any pods. node-exporter requires hostNetwork, hostPID,
+# hostPath volumes, and hostPort — privileged enforcement is required for this
+# namespace. warn/audit=restricted are applied unconditionally in all environments
 # so hardening gaps surface in audit logs without blocking pods.
 resource "kubernetes_namespace_v1" "prometheus" {
   metadata {

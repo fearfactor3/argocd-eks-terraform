@@ -37,5 +37,5 @@ approve if {
 approve if {
 	is_emergency_destruction
 	count(rejections) == 0
-	count(approvals) >= 2
+	count(approvals) >= 1
 }

@@ -117,7 +117,8 @@ VPC (all traffic)
 CloudWatch Logs
   /aws/vpc-flow-logs/<cluster-name>
   │
-  │  loki.source.cloudwatch  (Grafana Alloy)
+  │  otelcol.receiver.awscloudwatch  (Grafana Alloy)
+  │  → otelcol.exporter.loki → loki.write
   │  polls every 60 seconds
   ▼
 Loki  (http://loki:3100)
@@ -290,4 +291,5 @@ These decisions must be made before production go-live. Until they are resolved,
 ## Runbooks
 
 - [Initial Bootstrap](runbooks/initial-bootstrap.md) — First-time deployment from zero to running dev + prod
+- [Bootstrap Troubleshooting](runbooks/bootstrap-troubleshooting.md) — Failure patterns, rollback procedure, and EKS/Spacelift contingencies
 - [Emergency: Destroying Production Infrastructure](runbooks/emergency-destroy.md) — Override the prod-plan policy and destroy protected resources
