@@ -125,6 +125,11 @@ locals {
       project_root = "stacks/eks-addons"
       extra_globs  = []
     }
+    kyverno = {
+      description  = "Kyverno policy engine and best-practice ClusterPolicies"
+      project_root = "stacks/kyverno"
+      extra_globs  = []
+    }
     argo-cd = {
       description  = "ArgoCD GitOps engine Helm release"
       project_root = "stacks/argo-cd"
@@ -172,6 +177,7 @@ locals {
       "eks-${env}/TF_VAR_enable_scheduled_scaling"     = { stack = "eks-${env}", name = "TF_VAR_enable_scheduled_scaling", value = tostring(cfg.enable_scheduled_scaling), write_only = false }
       "eks-${env}/TF_VAR_public_access_cidrs"          = { stack = "eks-${env}", name = "TF_VAR_public_access_cidrs", value = jsonencode(cfg.public_access_cidrs), write_only = false }
       "eks-addons-${env}/TF_VAR_environment"           = { stack = "eks-addons-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+      "kyverno-${env}/TF_VAR_environment"              = { stack = "kyverno-${env}", name = "TF_VAR_environment", value = env, write_only = false }
       "argo-cd-${env}/TF_VAR_environment"              = { stack = "argo-cd-${env}", name = "TF_VAR_environment", value = env, write_only = false }
       "argo-cd-${env}/TF_VAR_argocd_resource_profile"  = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_resource_profile", value = cfg.argocd_resource_profile, write_only = false }
       "argo-cd-${env}/TF_VAR_argocd_source_repo"       = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_source_repo", value = cfg.argocd_source_repo, write_only = false }
@@ -251,19 +257,28 @@ resource "spacelift_stack_dependency" "eks_addons_needs_eks" {
   depends_on_stack_id = spacelift_stack.env["eks-${each.key}"].id
 }
 
-# Dependencies: argo-cd depends on eks-addons (LB controller must be running before Ingress), per environment
-resource "spacelift_stack_dependency" "argo_cd_needs_eks_addons" {
+# Dependencies: kyverno depends on eks-addons (admission webhook must be live
+# before app stacks deploy pods), per environment
+resource "spacelift_stack_dependency" "kyverno_needs_eks_addons" {
   for_each = var.environments
 
-  stack_id            = spacelift_stack.env["argo-cd-${each.key}"].id
+  stack_id            = spacelift_stack.env["kyverno-${each.key}"].id
   depends_on_stack_id = spacelift_stack.env["eks-addons-${each.key}"].id
 }
 
-# Dependencies: prometheus depends on eks-addons, per environment
-resource "spacelift_stack_dependency" "prometheus_needs_eks_addons" {
+# Dependencies: argo-cd depends on kyverno (webhook live before Ingress pods), per environment
+resource "spacelift_stack_dependency" "argo_cd_needs_kyverno" {
+  for_each = var.environments
+
+  stack_id            = spacelift_stack.env["argo-cd-${each.key}"].id
+  depends_on_stack_id = spacelift_stack.env["kyverno-${each.key}"].id
+}
+
+# Dependencies: prometheus depends on kyverno, per environment
+resource "spacelift_stack_dependency" "prometheus_needs_kyverno" {
   for_each            = var.environments
   stack_id            = spacelift_stack.env["prometheus-${each.key}"].id
-  depends_on_stack_id = spacelift_stack.env["eks-addons-${each.key}"].id
+  depends_on_stack_id = spacelift_stack.env["kyverno-${each.key}"].id
 }
 
 # Cross-stack output references: network -> eks
@@ -338,49 +353,70 @@ resource "spacelift_stack_dependency_reference" "eks_addons_external_secrets_rol
   input_name          = "TF_VAR_external_secrets_role_arn"
 }
 
-# Cross-stack output references: eks-addons -> argo-cd
-# argo-cd and prometheus now depend on eks-addons (not eks directly) so the
-# LB controller is running before any Ingress resources are created.
-# The cluster credentials are passed through from the eks-addons dependency.
+# Cross-stack output references: eks-addons -> kyverno
+resource "spacelift_stack_dependency_reference" "kyverno_eks_cluster_name" {
+  for_each            = var.environments
+  stack_dependency_id = spacelift_stack_dependency.kyverno_needs_eks_addons[each.key].id
+  output_name         = "eks_cluster_name"
+  input_name          = "TF_VAR_eks_cluster_name"
+}
+
+resource "spacelift_stack_dependency_reference" "kyverno_eks_cluster_endpoint" {
+  for_each            = var.environments
+  stack_dependency_id = spacelift_stack_dependency.kyverno_needs_eks_addons[each.key].id
+  output_name         = "eks_cluster_endpoint"
+  input_name          = "TF_VAR_eks_cluster_endpoint"
+}
+
+resource "spacelift_stack_dependency_reference" "kyverno_cluster_ca_certificate" {
+  for_each            = var.environments
+  stack_dependency_id = spacelift_stack_dependency.kyverno_needs_eks_addons[each.key].id
+  output_name         = "cluster_ca_certificate"
+  input_name          = "TF_VAR_cluster_ca_certificate"
+}
+
+# Cross-stack output references: kyverno -> argo-cd
+# argo-cd and prometheus now depend on kyverno so the admission webhook is live
+# before any app pods are scheduled. Cluster credentials pass through from kyverno.
 resource "spacelift_stack_dependency_reference" "argo_cd_eks_cluster_name" {
   for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.argo_cd_needs_eks_addons[each.key].id
+  stack_dependency_id = spacelift_stack_dependency.argo_cd_needs_kyverno[each.key].id
   output_name         = "eks_cluster_name"
   input_name          = "TF_VAR_eks_cluster_name"
 }
 
 resource "spacelift_stack_dependency_reference" "argo_cd_eks_cluster_endpoint" {
   for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.argo_cd_needs_eks_addons[each.key].id
+  stack_dependency_id = spacelift_stack_dependency.argo_cd_needs_kyverno[each.key].id
   output_name         = "eks_cluster_endpoint"
   input_name          = "TF_VAR_eks_cluster_endpoint"
 }
 
 resource "spacelift_stack_dependency_reference" "argo_cd_cluster_ca_certificate" {
   for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.argo_cd_needs_eks_addons[each.key].id
+  stack_dependency_id = spacelift_stack_dependency.argo_cd_needs_kyverno[each.key].id
   output_name         = "cluster_ca_certificate"
   input_name          = "TF_VAR_cluster_ca_certificate"
 }
 
-# Cross-stack output references: eks-addons -> prometheus
+# Cross-stack output references: kyverno -> prometheus
 resource "spacelift_stack_dependency_reference" "prometheus_eks_cluster_name" {
   for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.prometheus_needs_eks_addons[each.key].id
+  stack_dependency_id = spacelift_stack_dependency.prometheus_needs_kyverno[each.key].id
   output_name         = "eks_cluster_name"
   input_name          = "TF_VAR_eks_cluster_name"
 }
 
 resource "spacelift_stack_dependency_reference" "prometheus_eks_cluster_endpoint" {
   for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.prometheus_needs_eks_addons[each.key].id
+  stack_dependency_id = spacelift_stack_dependency.prometheus_needs_kyverno[each.key].id
   output_name         = "eks_cluster_endpoint"
   input_name          = "TF_VAR_eks_cluster_endpoint"
 }
 
 resource "spacelift_stack_dependency_reference" "prometheus_cluster_ca_certificate" {
   for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.prometheus_needs_eks_addons[each.key].id
+  stack_dependency_id = spacelift_stack_dependency.prometheus_needs_kyverno[each.key].id
   output_name         = "cluster_ca_certificate"
   input_name          = "TF_VAR_cluster_ca_certificate"
 }

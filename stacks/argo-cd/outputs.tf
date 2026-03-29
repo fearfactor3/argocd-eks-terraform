@@ -1,11 +1,11 @@
 output "argocd_release_namespace" {
   description = "Namespace where Argo CD is installed"
-  value       = module.argo_cd.argocd_release_namespace
+  value       = helm_release.argocd.namespace
 }
 
 output "argocd_server_load_balancer" {
   description = "Load balancer hostname for the Argo CD server"
-  value       = module.argo_cd.argocd_server_load_balancer
+  value       = try(data.kubernetes_service_v1.argocd_server.status[0].load_balancer[0].ingress[0].hostname, "pending")
 }
 
 output "argocd_initial_admin_secret" {

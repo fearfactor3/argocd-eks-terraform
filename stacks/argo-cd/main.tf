@@ -96,14 +96,13 @@ resource "kubernetes_secret_v1" "argocd_secret" {
 
 # Argo CD is deployed as a GitOps engine — it watches a Git repository and
 # continuously reconciles the cluster state to match what is declared there.
-# The server is exposed via an NLB so the UI and CLI (argocd login) are
+# The server is exposed via an ALB Ingress so the UI and CLI (argocd login) are
 # reachable from outside the cluster without needing kubectl port-forward.
-module "argo_cd" {
-  source           = "../../modules/argo-cd"
-  release_name     = "argocd"
-  helm_repo_url    = "https://argoproj.github.io/argo-helm"
-  chart_name       = "argo-cd"
-  chart_version    = var.argocd_chart_version
+resource "helm_release" "argocd" {
+  name             = "argocd"
+  repository       = "https://argoproj.github.io/argo-helm"
+  chart            = "argo-cd"
+  version          = var.argocd_chart_version
   namespace        = kubernetes_namespace_v1.argocd.metadata[0].name
   create_namespace = false
 
@@ -188,6 +187,13 @@ module "argo_cd" {
   })]
 }
 
+data "kubernetes_service_v1" "argocd_server" {
+  metadata {
+    name      = "argocd-server"
+    namespace = helm_release.argocd.namespace
+  }
+}
+
 # The argocd-apps chart bootstraps ArgoCD AppProjects (and Applications) as a
 # Helm release so they are version-controlled and applied after the ArgoCD CRDs
 # exist. Using a separate Helm release avoids the plan-time CRD validation
@@ -241,5 +247,5 @@ resource "helm_release" "argocd_projects" {
     }
   })]
 
-  depends_on = [module.argo_cd]
+  depends_on = [helm_release.argocd]
 }

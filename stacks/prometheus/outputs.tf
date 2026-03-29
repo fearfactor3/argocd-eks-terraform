@@ -1,11 +1,11 @@
 output "prometheus_release_namespace" {
   description = "Namespace where Prometheus is installed"
-  value       = module.prometheus.prometheus_release_namespace
+  value       = helm_release.prometheus.namespace
 }
 
 output "grafana_load_balancer" {
   description = "Load balancer hostname for Grafana"
-  value       = module.prometheus.grafana_load_balancer
+  value       = try(data.kubernetes_service_v1.grafana.status[0].load_balancer[0].ingress[0].hostname, "pending")
 }
 
 output "grafana_admin_password" {

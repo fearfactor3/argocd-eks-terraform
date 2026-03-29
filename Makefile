@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
-STACKS     := network eks eks-addons argo-cd prometheus spacelift
-ENV_STACKS := network eks eks-addons argo-cd prometheus
+STACKS     := network eks eks-addons kyverno argo-cd prometheus spacelift
+ENV_STACKS := network eks eks-addons kyverno argo-cd prometheus
 
 .PHONY: help \
         init validate \

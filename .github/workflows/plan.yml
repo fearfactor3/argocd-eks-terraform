@@ -102,44 +102,64 @@ jobs:
       spacelift_dep_stack: eks-prod
     secrets: inherit
 
-  plan-argo-cd-dev:
+  plan-kyverno-dev:
     needs: plan-eks-addons-dev
+    uses: ./.github/workflows/_tofu-plan-stack.yml
+    with:
+      stack_name: kyverno
+      environment: dev
+      aws_region: ${{ vars.AWS_REGION }}
+      spacelift_dep_stack: eks-addons-dev
+    secrets: inherit
+
+  plan-kyverno-prod:
+    needs: plan-eks-addons-prod
+    uses: ./.github/workflows/_tofu-plan-stack.yml
+    with:
+      stack_name: kyverno
+      environment: prod
+      aws_region: ${{ vars.AWS_REGION }}
+      spacelift_dep_stack: eks-addons-prod
+    secrets: inherit
+
+  plan-argo-cd-dev:
+    needs: plan-kyverno-dev
     uses: ./.github/workflows/_tofu-plan-stack.yml
     with:
       stack_name: argo-cd
       environment: dev
       aws_region: ${{ vars.AWS_REGION }}
-      spacelift_dep_stack: eks-addons-dev
+      spacelift_dep_stack: kyverno-dev
     secrets: inherit
 
   plan-argo-cd-prod:
-    needs: plan-eks-addons-prod
+    needs: plan-kyverno-prod
     uses: ./.github/workflows/_tofu-plan-stack.yml
     with:
       stack_name: argo-cd
       environment: prod
       aws_region: ${{ vars.AWS_REGION }}
-      spacelift_dep_stack: eks-addons-prod
+      spacelift_dep_stack: kyverno-prod
     secrets: inherit
 
   plan-prometheus-dev:
-    needs: plan-eks-addons-dev
+    needs: plan-kyverno-dev
     uses: ./.github/workflows/_tofu-plan-stack.yml
     with:
       stack_name: prometheus
       environment: dev
       aws_region: ${{ vars.AWS_REGION }}
-      spacelift_dep_stack: eks-addons-dev
+      spacelift_dep_stack: kyverno-dev
     secrets: inherit
 
   plan-prometheus-prod:
-    needs: plan-eks-addons-prod
+    needs: plan-kyverno-prod
     uses: ./.github/workflows/_tofu-plan-stack.yml
     with:
       stack_name: prometheus
       environment: prod
       aws_region: ${{ vars.AWS_REGION }}
-      spacelift_dep_stack: eks-addons-prod
+      spacelift_dep_stack: kyverno-prod
     secrets: inherit
 
   plan-summary:
@@ -151,6 +171,8 @@ jobs:
       - plan-eks-prod
       - plan-eks-addons-dev
       - plan-eks-addons-prod
+      - plan-kyverno-dev
+      - plan-kyverno-prod
       - plan-argo-cd-dev
       - plan-argo-cd-prod
       - plan-prometheus-dev
@@ -170,6 +192,8 @@ jobs:
           EKS_PROD:           ${{ needs.plan-eks-prod.result }}
           EKS_ADDONS_DEV:     ${{ needs.plan-eks-addons-dev.result }}
           EKS_ADDONS_PROD:    ${{ needs.plan-eks-addons-prod.result }}
+          KYVERNO_DEV:        ${{ needs.plan-kyverno-dev.result }}
+          KYVERNO_PROD:       ${{ needs.plan-kyverno-prod.result }}
           ARGOCD_DEV:         ${{ needs.plan-argo-cd-dev.result }}
           ARGOCD_PROD:        ${{ needs.plan-argo-cd-prod.result }}
           PROMETHEUS_DEV:     ${{ needs.plan-prometheus-dev.result }}
@@ -193,6 +217,7 @@ jobs:
             echo "| network    | $(result_icon "${NETWORK_DEV}") ${NETWORK_DEV}             | $(result_icon "${NETWORK_PROD}") ${NETWORK_PROD}             |"
             echo "| eks        | $(result_icon "${EKS_DEV}") ${EKS_DEV}                     | $(result_icon "${EKS_PROD}") ${EKS_PROD}                     |"
             echo "| eks-addons | $(result_icon "${EKS_ADDONS_DEV}") ${EKS_ADDONS_DEV}       | $(result_icon "${EKS_ADDONS_PROD}") ${EKS_ADDONS_PROD}       |"
+            echo "| kyverno    | $(result_icon "${KYVERNO_DEV}") ${KYVERNO_DEV}             | $(result_icon "${KYVERNO_PROD}") ${KYVERNO_PROD}             |"
             echo "| argo-cd    | $(result_icon "${ARGOCD_DEV}") ${ARGOCD_DEV}               | $(result_icon "${ARGOCD_PROD}") ${ARGOCD_PROD}               |"
             echo "| prometheus | $(result_icon "${PROMETHEUS_DEV}") ${PROMETHEUS_DEV}       | $(result_icon "${PROMETHEUS_PROD}") ${PROMETHEUS_PROD}       |"
             echo "COMMENT_EOF"
@@ -232,6 +257,8 @@ jobs:
           needs.plan-eks-prod.result        == 'failure' ||
           needs.plan-eks-addons-dev.result  == 'failure' ||
           needs.plan-eks-addons-prod.result == 'failure' ||
+          needs.plan-kyverno-dev.result     == 'failure' ||
+          needs.plan-kyverno-prod.result    == 'failure' ||
           needs.plan-argo-cd-dev.result     == 'failure' ||
           needs.plan-argo-cd-prod.result    == 'failure' ||
           needs.plan-prometheus-dev.result  == 'failure' ||
@@ -243,6 +270,8 @@ jobs:
           echo "eks        prod: ${{ needs.plan-eks-prod.result }}"
           echo "eks-addons dev:  ${{ needs.plan-eks-addons-dev.result }}"
           echo "eks-addons prod: ${{ needs.plan-eks-addons-prod.result }}"
+          echo "kyverno    dev:  ${{ needs.plan-kyverno-dev.result }}"
+          echo "kyverno    prod: ${{ needs.plan-kyverno-prod.result }}"
           echo "argo-cd    dev:  ${{ needs.plan-argo-cd-dev.result }}"
           echo "argo-cd    prod: ${{ needs.plan-argo-cd-prod.result }}"
           echo "prometheus dev:  ${{ needs.plan-prometheus-dev.result }}"
