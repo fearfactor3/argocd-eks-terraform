@@ -1,4 +1,14 @@
 locals {
+  namespace = kubernetes_namespace_v1.argocd.metadata[0].name
+
+  # TLS annotations added to the ALB Ingress when an ACM certificate is provided.
+  # Omitting certificate_arn leaves the ALB as HTTP-only (suitable for initial bootstrap).
+  tls_annotations = var.certificate_arn != null && var.certificate_arn != "" ? {
+    "alb.ingress.kubernetes.io/certificate-arn" = var.certificate_arn
+    "alb.ingress.kubernetes.io/listen-ports"    = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
+    "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
+  } : {}
+
   # Resource presets keep the Helm values DRY while letting dev and prod differ.
   # "small" halves limits so ArgoCD fits comfortably on t3.medium nodes alongside
   # the Prometheus stack. "standard" applies production-grade sizing.
@@ -74,7 +84,7 @@ resource "random_password" "argocd_secret_key" {
 resource "kubernetes_secret_v1" "argocd_secret" {
   metadata {
     name      = "argocd-secret"
-    namespace = kubernetes_namespace_v1.argocd.metadata[0].name
+    namespace = local.namespace
     # Helm ownership labels/annotations are required so the ArgoCD chart can
     # adopt this pre-created secret rather than failing with "invalid ownership
     # metadata". Without these, Helm refuses to manage a secret it didn't create.
@@ -83,7 +93,7 @@ resource "kubernetes_secret_v1" "argocd_secret" {
     }
     annotations = {
       "meta.helm.sh/release-name"      = "argocd"
-      "meta.helm.sh/release-namespace" = kubernetes_namespace_v1.argocd.metadata[0].name
+      "meta.helm.sh/release-namespace" = local.namespace
     }
   }
 
@@ -103,7 +113,7 @@ resource "helm_release" "argocd" {
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
   version          = var.argocd_chart_version
-  namespace        = kubernetes_namespace_v1.argocd.metadata[0].name
+  namespace        = local.namespace
   create_namespace = false
 
   depends_on = [kubernetes_secret_v1.argocd_secret]
@@ -151,11 +161,7 @@ resource "helm_release" "argocd" {
             "alb.ingress.kubernetes.io/backend-protocol" = "GRPC"
             "alb.ingress.kubernetes.io/listen-ports"     = jsonencode([{ HTTP = 80 }])
           },
-          var.certificate_arn != null && var.certificate_arn != "" ? {
-            "alb.ingress.kubernetes.io/certificate-arn" = var.certificate_arn
-            "alb.ingress.kubernetes.io/listen-ports"    = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
-            "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
-          } : {}
+          local.tls_annotations
         )
         hosts = ["argocd.${var.environment}.internal"]
       }
@@ -209,7 +215,7 @@ resource "helm_release" "argocd_projects" {
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argocd-apps"
   version    = var.argocd_apps_chart_version
-  namespace  = kubernetes_namespace_v1.argocd.metadata[0].name
+  namespace  = local.namespace
 
   values = [yamlencode({
     # argocd-apps v2.x uses a map keyed by project name, not a list.

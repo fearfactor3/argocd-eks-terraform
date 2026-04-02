@@ -100,10 +100,13 @@ See [docs/setup.md](docs/setup.md) for full installation instructions.
 | coredns Add-on | v1.11.4-eksbuild.2 |
 | kube-proxy Add-on | v1.32.6-eksbuild.12 |
 | aws-ebs-csi-driver Add-on | v1.56.0-eksbuild.1 |
-| Kyverno Helm Chart | 3.3.7 |
-| kyverno-policies Helm Chart | 3.3.4 |
+| Kyverno Helm Chart | 3.5.3 |
+| kyverno-policies Helm Chart | 3.5.3 |
 | Argo CD Helm Chart | 9.4.1 (App v3.3.0) |
+| argocd-apps Helm Chart | 2.0.2 |
 | kube-prometheus-stack Chart | 81.5.0 (Operator v0.88.1) |
+| Loki Chart | 6.55.0 |
+| Grafana Alloy Chart | 1.6.2 |
 | OPA | 1.14.1 |
 
 ## Stack Deployment Order
@@ -122,7 +125,9 @@ network-prod → eks-prod → eks-addons-prod → kyverno-prod → argo-cd-prod
 
 The `spacelift` stack is a meta-stack that manages all app stacks as code, including dependencies and per-environment variable injection.
 
-Cross-stack outputs (e.g., VPC ID from `network-<env>`, cluster endpoint from `eks-addons-<env>`) are injected by Spacelift as `TF_VAR_*` environment variables into dependent stacks automatically.
+Static per-environment config (e.g., node settings, admin principals) is loaded from each stack's `{env}.tfvars` file via `TF_CLI_ARGS_plan` and `TF_CLI_ARGS_apply` environment variables injected by the `spacelift` stack. Spacelift does not auto-load `*.tfvars` files — these env vars make local and Spacelift runs behave identically.
+
+Cross-stack outputs (e.g., VPC ID from `network-<env>`, cluster endpoint from `eks-addons-<env>`) are injected by Spacelift as `TF_VAR_*` environment variables into dependent stacks automatically. There is no precedence conflict: cross-stack `TF_VAR_*` values target variables absent from the `tfvars` files.
 
 ## CI/CD
 
@@ -186,7 +191,7 @@ Provisions the GitHub Actions OIDC provider and a least-privilege plan role used
 
 Sets up the VPC, public and private subnets, internet gateway, NAT gateway with Elastic IP, and route tables.
 
-Per-environment values (`vpc_cidr`, `public_subnets`, `private_subnets`, `cluster_name`) are injected by Spacelift from the `spacelift` stack's `environments` variable — no manual variable passing required.
+Per-environment values (`vpc_cidr`, `public_subnets`, `private_subnets`, `cluster_name`) are loaded from `{env}.tfvars` via `TF_CLI_ARGS` — no manual variable passing required.
 
 | Variable | Description | Default |
 | --- | --- | --- |
@@ -205,7 +210,7 @@ Creates the EKS cluster with managed node groups on private subnets, IAM roles a
 
 Cross-stack inputs are injected by Spacelift from the `network` stack.
 
-Per-environment values (`cluster_name`, `environment`, `node_group_*`) are injected by Spacelift from the `spacelift` stack's `environments` variable. Cross-stack inputs (`vpc_id`, `subnet_ids`) are injected by Spacelift from the `network-<env>` stack.
+Per-environment values (`cluster_name`, `environment`, `node_group_*`, `admin_iam_principals`) are loaded from `{env}.tfvars` via `TF_CLI_ARGS`. Cross-stack inputs (`vpc_id`, `subnet_ids`) are injected by Spacelift from the `network-<env>` stack.
 
 | Variable | Description | Default |
 | --- | --- | --- |
@@ -217,9 +222,13 @@ Per-environment values (`cluster_name`, `environment`, `node_group_*`) are injec
 | `node_group_max_capacity` | Maximum node count | — injected by Spacelift |
 | `node_group_min_capacity` | Minimum node count | — injected by Spacelift |
 | `node_group_instance_types` | Node instance types | — injected by Spacelift |
-| `public_access_cidrs` | CIDRs permitted to reach the public API endpoint | — |
+| `node_capacity_type` | Node capacity type (`SPOT` or `ON_DEMAND`) | — from `{env}.tfvars` |
+| `enable_scheduled_scaling` | Scale node group to 0 on evenings/weekends | — from `{env}.tfvars` |
+| `public_access_cidrs` | CIDRs permitted to reach the public API endpoint | — from `{env}.tfvars` |
+| `admin_iam_principals` | IAM role/user ARNs granted cluster admin via access entries | — from `{env}.tfvars` |
 | `vpc_id` | VPC ID (from `network-<env>` stack) | — injected by Spacelift |
 | `subnet_ids` | Private subnet IDs (from `network-<env>` stack) | — injected by Spacelift |
+| `vpc_cidr_block` | VPC CIDR block (from `network-<env>` stack) | — injected by Spacelift |
 | `vpc_cni_addon_version` | vpc-cni managed add-on version | `v1.20.4-eksbuild.2` |
 | `coredns_addon_version` | coredns managed add-on version | `v1.11.4-eksbuild.2` |
 | `kube_proxy_addon_version` | kube-proxy managed add-on version | `v1.32.6-eksbuild.12` |
@@ -233,10 +242,16 @@ Deploys cluster-level Helm add-ons that must be running before any `Ingress` res
 | --- | --- | --- |
 | `aws_region` | AWS region | `us-east-1` |
 | `environment` | Environment name (e.g. `dev`, `prod`) | — injected by Spacelift |
+| `aws_lb_controller_chart_version` | AWS Load Balancer Controller Helm chart version | `1.13.2` |
+| `cluster_autoscaler_chart_version` | cluster-autoscaler Helm chart version | `9.46.6` |
+| `external_secrets_chart_version` | external-secrets Helm chart version | `0.14.4` |
+| `vpc_id` | VPC ID (from `eks-<env>` stack) | — injected by Spacelift |
 | `eks_cluster_name` | EKS cluster name (from `eks-<env>` stack) | — injected by Spacelift |
 | `eks_cluster_endpoint` | EKS API endpoint (from `eks-<env>` stack) | — injected by Spacelift |
 | `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-<env>` stack) | — injected by Spacelift |
 | `aws_lb_controller_role_arn` | IRSA role ARN for AWS Load Balancer Controller (from `eks-<env>` stack) | — injected by Spacelift |
+| `cluster_autoscaler_role_arn` | IRSA role ARN for Cluster Autoscaler (from `eks-<env>` stack) | — injected by Spacelift |
+| `external_secrets_role_arn` | IRSA role ARN for External Secrets Operator (from `eks-<env>` stack) | — injected by Spacelift |
 
 ### kyverno
 
@@ -246,8 +261,8 @@ Deploys the Kyverno admission controller and `kyverno-policies` Helm releases in
 | --- | --- | --- |
 | `aws_region` | AWS region | `us-east-1` |
 | `environment` | Environment name (e.g. `dev`, `prod`) | — injected by Spacelift |
-| `kyverno_chart_version` | Kyverno Helm chart version | `3.3.7` |
-| `kyverno_policies_chart_version` | kyverno-policies Helm chart version | `3.3.4` |
+| `kyverno_chart_version` | Kyverno Helm chart version | `3.5.3` |
+| `kyverno_policies_chart_version` | kyverno-policies Helm chart version | `3.5.3` |
 | `eks_cluster_name` | EKS cluster name (from `eks-addons-<env>` stack) | — injected by Spacelift |
 | `eks_cluster_endpoint` | EKS API endpoint (from `eks-addons-<env>` stack) | — injected by Spacelift |
 | `cluster_ca_certificate` | Base64-encoded CA certificate (from `eks-addons-<env>` stack) | — injected by Spacelift |
@@ -263,6 +278,10 @@ Deploys Argo CD via Helm with an ALB Ingress. Cross-stack inputs are injected by
 | `aws_region` | AWS region | `us-east-1` |
 | `environment` | Environment name (e.g. `dev`, `prod`) | — injected by Spacelift |
 | `argocd_chart_version` | Argo CD Helm chart version | `9.4.1` |
+| `argocd_apps_chart_version` | argocd-apps chart version (bootstraps AppProjects) | `2.0.2` |
+| `argocd_source_repo` | Git repo URL ArgoCD is permitted to sync from | `*` (any — lock down before prod) |
+| `argocd_resource_profile` | Resource requests/limits preset (`small` or `standard`) | `small` |
+| `certificate_arn` | ACM certificate ARN for ALB HTTPS termination | `null` (HTTP-only) |
 | `eks_cluster_name` | EKS cluster name (from `kyverno-<env>` stack) | — injected by Spacelift |
 | `eks_cluster_endpoint` | EKS API endpoint (from `kyverno-<env>` stack) | — injected by Spacelift |
 | `cluster_ca_certificate` | Base64-encoded CA certificate (from `kyverno-<env>` stack) | — injected by Spacelift |
@@ -278,6 +297,11 @@ Deploys the kube-prometheus-stack (Prometheus, Grafana, Alertmanager) via Helm. 
 | `aws_region` | AWS region | `us-east-1` |
 | `environment` | Environment name (e.g. `dev`, `prod`) | — injected by Spacelift |
 | `prometheus_chart_version` | kube-prometheus-stack Helm chart version | `81.5.0` |
+| `loki_chart_version` | Loki Helm chart version | `6.55.0` |
+| `alloy_chart_version` | Grafana Alloy Helm chart version | `1.6.2` |
+| `prometheus_storage_size` | EBS volume size for Prometheus metrics | `50Gi` |
+| `loki_storage_size` | EBS volume size for Loki log storage | `10Gi` |
+| `certificate_arn` | ACM certificate ARN for ALB HTTPS termination | `null` (HTTP-only) |
 | `eks_cluster_name` | EKS cluster name (from `kyverno-<env>` stack) | — injected by Spacelift |
 | `eks_cluster_endpoint` | EKS API endpoint (from `kyverno-<env>` stack) | — injected by Spacelift |
 | `cluster_ca_certificate` | Base64-encoded CA certificate (from `kyverno-<env>` stack) | — injected by Spacelift |
@@ -286,7 +310,7 @@ Outputs: `prometheus_release_namespace`, `grafana_load_balancer`, Grafana admin 
 
 ### spacelift
 
-Manages all Spacelift stacks as code. Defines the cross-product of environments × stack types, wires stack dependencies, and injects per-environment configuration as `TF_VAR_*` environment variables into each stack.
+Manages all Spacelift stacks as code. Defines the cross-product of environments × stack types, wires stack dependencies, injects `TF_CLI_ARGS_plan`/`TF_CLI_ARGS_apply` so each stack loads its `{env}.tfvars`, and injects dynamic cross-stack values as `TF_VAR_*` environment variables.
 
 Per-environment defaults are controlled via the `environments` variable in `stacks/spacelift/variables.tf`:
 

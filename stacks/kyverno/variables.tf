@@ -17,13 +17,13 @@ variable "environment" {
 variable "kyverno_chart_version" {
   description = "Version of the Kyverno Helm chart"
   type        = string
-  default     = "3.3.7"
+  default     = "3.5.3" # 3.3.x used bitnami/kubectl:1.30.2 which does not exist on Docker Hub
 }
 
 variable "kyverno_policies_chart_version" {
   description = "Version of the kyverno-policies Helm chart"
   type        = string
-  default     = "3.3.4"
+  default     = "3.5.3"
 }
 
 # Cross-stack inputs from the eks-addons stack (injected by Spacelift as TF_VAR_*)
