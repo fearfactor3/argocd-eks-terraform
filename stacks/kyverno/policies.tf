@@ -30,22 +30,22 @@ data "http" "require_probes" {
   url = "${local.policy_base_url}/require-probes.yaml"
 }
 
-resource "kubernetes_manifest" "require_image_tag" {
-  manifest   = yamldecode(data.http.require_image_tag.response_body)
+resource "kubectl_manifest" "require_image_tag" {
+  yaml_body  = data.http.require_image_tag.response_body
   depends_on = [helm_release.kyverno]
 }
 
-resource "kubernetes_manifest" "require_resource_limits" {
-  manifest   = yamldecode(data.http.require_resource_limits.response_body)
+resource "kubectl_manifest" "require_resource_limits" {
+  yaml_body  = data.http.require_resource_limits.response_body
   depends_on = [helm_release.kyverno]
 }
 
-resource "kubernetes_manifest" "require_non_root" {
-  manifest   = yamldecode(data.http.require_non_root.response_body)
+resource "kubectl_manifest" "require_non_root" {
+  yaml_body  = data.http.require_non_root.response_body
   depends_on = [helm_release.kyverno]
 }
 
-resource "kubernetes_manifest" "require_probes" {
-  manifest   = yamldecode(data.http.require_probes.response_body)
+resource "kubectl_manifest" "require_probes" {
+  yaml_body  = data.http.require_probes.response_body
   depends_on = [helm_release.kyverno]
 }
