@@ -83,8 +83,8 @@ Kyverno sits between `eks-addons` and `{argo-cd, prometheus}` so the admission w
 
 | Release | Chart | Purpose |
 | --- | --- | --- |
-| `kyverno` | kyverno/kyverno | Admission controller, background controller, cleanup controller, reports controller. dev=1 replica, prod=3 replicas. |
-| `kyverno-policies` | kyverno/kyverno-policies | `podSecurity` and `bestPractices` ClusterPolicy groups. All policies run in `Audit` mode — violations reported, nothing blocked. |
+| `kyverno` | kyverno/kyverno `3.5.3` | Admission controller, background controller, cleanup controller, reports controller. dev=1 replica, prod=3 replicas. |
+| `kyverno-policies` | kyverno/kyverno-policies `3.5.3` | `podSecurity` and `bestPractices` ClusterPolicy groups. All policies run in `Audit` mode — violations reported, nothing blocked. |
 
 **Policy groups enabled:**
 
@@ -118,8 +118,9 @@ The Spacelift stack is itself an OpenTofu stack that creates and manages all oth
 It uses `setproduct(environments, stack_types)` to generate the full matrix of per-environment stacks without repetition, then:
 
 1. Creates each `spacelift_stack` resource
-2. Injects per-environment configuration as `TF_VAR_*` environment variables
-3. Wires `spacelift_stack_dependency` and `spacelift_stack_dependency_reference` resources to pass cross-stack outputs automatically
+2. Injects `TF_CLI_ARGS_plan` and `TF_CLI_ARGS_apply` pointing to `{env}.tfvars` so static per-environment config (e.g. `admin_iam_principals`, node settings) is loaded from the tfvars file on every Spacelift run — Spacelift does not auto-load `*.tfvars` files
+3. Injects dynamic cross-stack `TF_VAR_*` environment variables (e.g. `eks_cluster_endpoint`) via `spacelift_stack_dependency_reference` — these target variables absent from the tfvars files so there is no precedence conflict
+4. Wires `spacelift_stack_dependency` and `spacelift_stack_dependency_reference` resources to pass cross-stack outputs automatically
 
 When you change an environment's node sizing in `variables.tf` and apply the Spacelift stack, Spacelift updates the downstream stacks on the next run.
 

@@ -158,38 +158,95 @@ locals {
   }
 
   # Per-environment variables injected into each stack via spacelift_environment_variable
-  stack_env_vars = merge([
-    for env, cfg in var.environments : {
-      "network-${env}/TF_VAR_environment"              = { stack = "network-${env}", name = "TF_VAR_environment", value = env, write_only = false }
-      "network-${env}/TF_VAR_vpc_cidr"                 = { stack = "network-${env}", name = "TF_VAR_vpc_cidr", value = cfg.vpc_cidr, write_only = false }
-      "network-${env}/TF_VAR_cluster_name"             = { stack = "network-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name, write_only = false }
-      "network-${env}/TF_VAR_public_subnets"           = { stack = "network-${env}", name = "TF_VAR_public_subnets", value = jsonencode(cfg.public_subnets), write_only = false }
-      "network-${env}/TF_VAR_private_subnets"          = { stack = "network-${env}", name = "TF_VAR_private_subnets", value = jsonencode(cfg.private_subnets), write_only = false }
-      "network-${env}/TF_VAR_flow_logs_traffic_type"   = { stack = "network-${env}", name = "TF_VAR_flow_logs_traffic_type", value = cfg.flow_logs_traffic_type, write_only = false }
-      "network-${env}/TF_VAR_flow_logs_retention_days" = { stack = "network-${env}", name = "TF_VAR_flow_logs_retention_days", value = tostring(cfg.flow_logs_retention_days), write_only = false }
-      "eks-${env}/TF_VAR_environment"                  = { stack = "eks-${env}", name = "TF_VAR_environment", value = env, write_only = false }
-      "eks-${env}/TF_VAR_cluster_name"                 = { stack = "eks-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name, write_only = false }
-      "eks-${env}/TF_VAR_node_group_instance_types"    = { stack = "eks-${env}", name = "TF_VAR_node_group_instance_types", value = jsonencode(cfg.node_instance_types), write_only = false }
-      "eks-${env}/TF_VAR_node_group_desired_capacity"  = { stack = "eks-${env}", name = "TF_VAR_node_group_desired_capacity", value = tostring(cfg.node_desired), write_only = false }
-      "eks-${env}/TF_VAR_node_group_max_capacity"      = { stack = "eks-${env}", name = "TF_VAR_node_group_max_capacity", value = tostring(cfg.node_max), write_only = false }
-      "eks-${env}/TF_VAR_node_group_min_capacity"      = { stack = "eks-${env}", name = "TF_VAR_node_group_min_capacity", value = tostring(cfg.node_min), write_only = false }
-      "eks-${env}/TF_VAR_node_capacity_type"           = { stack = "eks-${env}", name = "TF_VAR_node_capacity_type", value = cfg.node_capacity_type, write_only = false }
-      "eks-${env}/TF_VAR_enable_scheduled_scaling"     = { stack = "eks-${env}", name = "TF_VAR_enable_scheduled_scaling", value = tostring(cfg.enable_scheduled_scaling), write_only = false }
-      "eks-${env}/TF_VAR_public_access_cidrs"          = { stack = "eks-${env}", name = "TF_VAR_public_access_cidrs", value = jsonencode(cfg.public_access_cidrs), write_only = false }
-      "eks-addons-${env}/TF_VAR_environment"           = { stack = "eks-addons-${env}", name = "TF_VAR_environment", value = env, write_only = false }
-      "kyverno-${env}/TF_VAR_environment"              = { stack = "kyverno-${env}", name = "TF_VAR_environment", value = env, write_only = false }
-      "argo-cd-${env}/TF_VAR_environment"              = { stack = "argo-cd-${env}", name = "TF_VAR_environment", value = env, write_only = false }
-      "argo-cd-${env}/TF_VAR_argocd_resource_profile"  = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_resource_profile", value = cfg.argocd_resource_profile, write_only = false }
-      "argo-cd-${env}/TF_VAR_argocd_source_repo"       = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_source_repo", value = cfg.argocd_source_repo, write_only = false }
-      # certificate_arn is marked secret — it identifies TLS infrastructure and
-      # should not be visible in Spacelift run logs or the UI.
-      "argo-cd-${env}/TF_VAR_certificate_arn"            = { stack = "argo-cd-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn, write_only = true }
-      "prometheus-${env}/TF_VAR_environment"             = { stack = "prometheus-${env}", name = "TF_VAR_environment", value = env, write_only = false }
-      "prometheus-${env}/TF_VAR_prometheus_storage_size" = { stack = "prometheus-${env}", name = "TF_VAR_prometheus_storage_size", value = cfg.prometheus_storage_size, write_only = false }
-      "prometheus-${env}/TF_VAR_loki_storage_size"       = { stack = "prometheus-${env}", name = "TF_VAR_loki_storage_size", value = cfg.loki_storage_size, write_only = false }
-      "prometheus-${env}/TF_VAR_certificate_arn"         = { stack = "prometheus-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn, write_only = true }
+  stack_env_vars = merge(
+    # Per-stack TF_VAR_* — dynamic values that differ per stack or environment.
+    merge([
+      for env, cfg in var.environments : {
+        "network-${env}/TF_VAR_environment"              = { stack = "network-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+        "network-${env}/TF_VAR_vpc_cidr"                 = { stack = "network-${env}", name = "TF_VAR_vpc_cidr", value = cfg.vpc_cidr, write_only = false }
+        "network-${env}/TF_VAR_cluster_name"             = { stack = "network-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name, write_only = false }
+        "network-${env}/TF_VAR_public_subnets"           = { stack = "network-${env}", name = "TF_VAR_public_subnets", value = jsonencode(cfg.public_subnets), write_only = false }
+        "network-${env}/TF_VAR_private_subnets"          = { stack = "network-${env}", name = "TF_VAR_private_subnets", value = jsonencode(cfg.private_subnets), write_only = false }
+        "network-${env}/TF_VAR_flow_logs_traffic_type"   = { stack = "network-${env}", name = "TF_VAR_flow_logs_traffic_type", value = cfg.flow_logs_traffic_type, write_only = false }
+        "network-${env}/TF_VAR_flow_logs_retention_days" = { stack = "network-${env}", name = "TF_VAR_flow_logs_retention_days", value = tostring(cfg.flow_logs_retention_days), write_only = false }
+        "eks-${env}/TF_VAR_environment"                  = { stack = "eks-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+        "eks-${env}/TF_VAR_cluster_name"                 = { stack = "eks-${env}", name = "TF_VAR_cluster_name", value = cfg.cluster_name, write_only = false }
+        "eks-${env}/TF_VAR_node_group_instance_types"    = { stack = "eks-${env}", name = "TF_VAR_node_group_instance_types", value = jsonencode(cfg.node_instance_types), write_only = false }
+        "eks-${env}/TF_VAR_node_group_desired_capacity"  = { stack = "eks-${env}", name = "TF_VAR_node_group_desired_capacity", value = tostring(cfg.node_desired), write_only = false }
+        "eks-${env}/TF_VAR_node_group_max_capacity"      = { stack = "eks-${env}", name = "TF_VAR_node_group_max_capacity", value = tostring(cfg.node_max), write_only = false }
+        "eks-${env}/TF_VAR_node_group_min_capacity"      = { stack = "eks-${env}", name = "TF_VAR_node_group_min_capacity", value = tostring(cfg.node_min), write_only = false }
+        "eks-${env}/TF_VAR_node_capacity_type"           = { stack = "eks-${env}", name = "TF_VAR_node_capacity_type", value = cfg.node_capacity_type, write_only = false }
+        "eks-${env}/TF_VAR_enable_scheduled_scaling"     = { stack = "eks-${env}", name = "TF_VAR_enable_scheduled_scaling", value = tostring(cfg.enable_scheduled_scaling), write_only = false }
+        "eks-${env}/TF_VAR_public_access_cidrs"          = { stack = "eks-${env}", name = "TF_VAR_public_access_cidrs", value = jsonencode(cfg.public_access_cidrs), write_only = false }
+        "eks-addons-${env}/TF_VAR_environment"           = { stack = "eks-addons-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+        "kyverno-${env}/TF_VAR_environment"              = { stack = "kyverno-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+        "argo-cd-${env}/TF_VAR_environment"              = { stack = "argo-cd-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+        "argo-cd-${env}/TF_VAR_argocd_resource_profile"  = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_resource_profile", value = cfg.argocd_resource_profile, write_only = false }
+        "argo-cd-${env}/TF_VAR_argocd_source_repo"       = { stack = "argo-cd-${env}", name = "TF_VAR_argocd_source_repo", value = cfg.argocd_source_repo, write_only = false }
+        # certificate_arn is marked secret — it identifies TLS infrastructure and
+        # should not be visible in Spacelift run logs or the UI.
+        "argo-cd-${env}/TF_VAR_certificate_arn"            = { stack = "argo-cd-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn, write_only = true }
+        "prometheus-${env}/TF_VAR_environment"             = { stack = "prometheus-${env}", name = "TF_VAR_environment", value = env, write_only = false }
+        "prometheus-${env}/TF_VAR_prometheus_storage_size" = { stack = "prometheus-${env}", name = "TF_VAR_prometheus_storage_size", value = cfg.prometheus_storage_size, write_only = false }
+        "prometheus-${env}/TF_VAR_loki_storage_size"       = { stack = "prometheus-${env}", name = "TF_VAR_loki_storage_size", value = cfg.loki_storage_size, write_only = false }
+        "prometheus-${env}/TF_VAR_certificate_arn"         = { stack = "prometheus-${env}", name = "TF_VAR_certificate_arn", value = cfg.certificate_arn, write_only = true }
+      }
+    ]...),
+    # Load {env}.tfvars on every plan and apply for all env stacks. Spacelift does not
+    # auto-load *.tfvars files — without this, variables like admin_iam_principals default
+    # to [] and the Spacelift integration role never receives EKS cluster admin access,
+    # causing all downstream kubernetes/helm provider stacks to fail authorization.
+    # TF_VAR_* cross-stack injections are unaffected: they target variables absent from
+    # the tfvars files so there is no precedence conflict.
+    { for pair in setproduct(keys(var.environments), keys(local.env_stack_types), ["TF_CLI_ARGS_plan", "TF_CLI_ARGS_apply"]) :
+      "${pair[1]}-${pair[0]}/${pair[2]}" => {
+        stack      = "${pair[1]}-${pair[0]}"
+        name       = pair[2]
+        value      = "-var-file=${pair[0]}.tfvars"
+        write_only = false
+      }
     }
-  ]...)
+  )
+
+  # Directed dependency graph: key = downstream stack, depends_on_stack = upstream.
+  # Deployment order: network → eks → eks-addons → kyverno → {argo-cd, prometheus}
+  stack_deps = {
+    "eks"        = { stack = "eks", depends_on_stack = "network" }
+    "eks-addons" = { stack = "eks-addons", depends_on_stack = "eks" }
+    "kyverno"    = { stack = "kyverno", depends_on_stack = "eks-addons" }
+    "argo-cd"    = { stack = "argo-cd", depends_on_stack = "kyverno" }
+    "prometheus" = { stack = "prometheus", depends_on_stack = "kyverno" }
+  }
+
+  # Cross-stack output → TF_VAR_* input mappings, keyed by the downstream stack name.
+  # Each entry causes Spacelift to inject one upstream output as a variable into the
+  # downstream stack after the dependency run completes.
+  stack_output_refs = [
+    # network → eks
+    { dep = "eks", output = "vpc_id", input = "TF_VAR_vpc_id" },
+    { dep = "eks", output = "private_subnet_ids", input = "TF_VAR_subnet_ids" },
+    { dep = "eks", output = "vpc_cidr_block", input = "TF_VAR_vpc_cidr_block" },
+    # eks → eks-addons
+    { dep = "eks-addons", output = "vpc_id", input = "TF_VAR_vpc_id" },
+    { dep = "eks-addons", output = "eks_cluster_name", input = "TF_VAR_eks_cluster_name" },
+    { dep = "eks-addons", output = "eks_cluster_endpoint", input = "TF_VAR_eks_cluster_endpoint" },
+    { dep = "eks-addons", output = "cluster_ca_certificate", input = "TF_VAR_cluster_ca_certificate" },
+    { dep = "eks-addons", output = "aws_lb_controller_role_arn", input = "TF_VAR_aws_lb_controller_role_arn" },
+    { dep = "eks-addons", output = "cluster_autoscaler_role_arn", input = "TF_VAR_cluster_autoscaler_role_arn" },
+    { dep = "eks-addons", output = "external_secrets_role_arn", input = "TF_VAR_external_secrets_role_arn" },
+    # eks-addons → kyverno
+    { dep = "kyverno", output = "eks_cluster_name", input = "TF_VAR_eks_cluster_name" },
+    { dep = "kyverno", output = "eks_cluster_endpoint", input = "TF_VAR_eks_cluster_endpoint" },
+    { dep = "kyverno", output = "cluster_ca_certificate", input = "TF_VAR_cluster_ca_certificate" },
+    # kyverno → argo-cd (cluster credentials pass through kyverno as outputs)
+    { dep = "argo-cd", output = "eks_cluster_name", input = "TF_VAR_eks_cluster_name" },
+    { dep = "argo-cd", output = "eks_cluster_endpoint", input = "TF_VAR_eks_cluster_endpoint" },
+    { dep = "argo-cd", output = "cluster_ca_certificate", input = "TF_VAR_cluster_ca_certificate" },
+    # kyverno → prometheus
+    { dep = "prometheus", output = "eks_cluster_name", input = "TF_VAR_eks_cluster_name" },
+    { dep = "prometheus", output = "eks_cluster_endpoint", input = "TF_VAR_eks_cluster_endpoint" },
+    { dep = "prometheus", output = "cluster_ca_certificate", input = "TF_VAR_cluster_ca_certificate" },
+  ]
 }
 
 # IAM stack — account-scoped singleton, not per environment
@@ -241,184 +298,40 @@ resource "spacelift_environment_variable" "env_config" {
   write_only = each.value.write_only
 }
 
-# Dependencies: eks depends on network, per environment
-resource "spacelift_stack_dependency" "eks_needs_network" {
-  for_each = var.environments
+# Stack dependency chain — data-driven from local.stack_deps.
+# Adding a new stack only requires a new entry in the locals map, not a new resource block.
+# Deployment order: network → eks → eks-addons → kyverno → {argo-cd, prometheus}
+resource "spacelift_stack_dependency" "this" {
+  for_each = {
+    for pair in setproduct(keys(var.environments), keys(local.stack_deps)) :
+    "${pair[1]}-${pair[0]}" => {
+      env              = pair[0]
+      stack            = local.stack_deps[pair[1]].stack
+      depends_on_stack = local.stack_deps[pair[1]].depends_on_stack
+    }
+  }
 
-  stack_id            = spacelift_stack.env["eks-${each.key}"].id
-  depends_on_stack_id = spacelift_stack.env["network-${each.key}"].id
+  stack_id            = spacelift_stack.env["${each.value.stack}-${each.value.env}"].id
+  depends_on_stack_id = spacelift_stack.env["${each.value.depends_on_stack}-${each.value.env}"].id
 }
 
-# Dependencies: eks-addons depends on eks (needs cluster + LB controller role), per environment
-resource "spacelift_stack_dependency" "eks_addons_needs_eks" {
-  for_each = var.environments
+# Cross-stack output references — data-driven from local.stack_output_refs.
+# Each entry injects one upstream output as a TF_VAR_* into the downstream stack.
+# Adding a new cross-stack reference only requires a new entry in the locals list.
+resource "spacelift_stack_dependency_reference" "this" {
+  for_each = {
+    for pair in setproduct(keys(var.environments), local.stack_output_refs) :
+    "${pair[1].dep}-${pair[0]}/${pair[1].output}" => {
+      env    = pair[0]
+      dep    = pair[1].dep
+      output = pair[1].output
+      input  = pair[1].input
+    }
+  }
 
-  stack_id            = spacelift_stack.env["eks-addons-${each.key}"].id
-  depends_on_stack_id = spacelift_stack.env["eks-${each.key}"].id
-}
-
-# Dependencies: kyverno depends on eks-addons (admission webhook must be live
-# before app stacks deploy pods), per environment
-resource "spacelift_stack_dependency" "kyverno_needs_eks_addons" {
-  for_each = var.environments
-
-  stack_id            = spacelift_stack.env["kyverno-${each.key}"].id
-  depends_on_stack_id = spacelift_stack.env["eks-addons-${each.key}"].id
-}
-
-# Dependencies: argo-cd depends on kyverno (webhook live before Ingress pods), per environment
-resource "spacelift_stack_dependency" "argo_cd_needs_kyverno" {
-  for_each = var.environments
-
-  stack_id            = spacelift_stack.env["argo-cd-${each.key}"].id
-  depends_on_stack_id = spacelift_stack.env["kyverno-${each.key}"].id
-}
-
-# Dependencies: prometheus depends on kyverno, per environment
-resource "spacelift_stack_dependency" "prometheus_needs_kyverno" {
-  for_each            = var.environments
-  stack_id            = spacelift_stack.env["prometheus-${each.key}"].id
-  depends_on_stack_id = spacelift_stack.env["kyverno-${each.key}"].id
-}
-
-# Cross-stack output references: network -> eks
-resource "spacelift_stack_dependency_reference" "vpc_id" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.eks_needs_network[each.key].id
-  output_name         = "vpc_id"
-  input_name          = "TF_VAR_vpc_id"
-}
-
-resource "spacelift_stack_dependency_reference" "subnet_ids" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.eks_needs_network[each.key].id
-  output_name         = "private_subnet_ids"
-  input_name          = "TF_VAR_subnet_ids"
-}
-
-resource "spacelift_stack_dependency_reference" "vpc_cidr_block" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.eks_needs_network[each.key].id
-  output_name         = "vpc_cidr_block"
-  input_name          = "TF_VAR_vpc_cidr_block"
-}
-
-# Cross-stack output references: eks -> eks-addons
-resource "spacelift_stack_dependency_reference" "eks_addons_vpc_id" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
-  output_name         = "vpc_id"
-  input_name          = "TF_VAR_vpc_id"
-}
-
-resource "spacelift_stack_dependency_reference" "eks_addons_cluster_name" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
-  output_name         = "eks_cluster_name"
-  input_name          = "TF_VAR_eks_cluster_name"
-}
-
-resource "spacelift_stack_dependency_reference" "eks_addons_cluster_endpoint" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
-  output_name         = "eks_cluster_endpoint"
-  input_name          = "TF_VAR_eks_cluster_endpoint"
-}
-
-resource "spacelift_stack_dependency_reference" "eks_addons_cluster_ca_certificate" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
-  output_name         = "cluster_ca_certificate"
-  input_name          = "TF_VAR_cluster_ca_certificate"
-}
-
-resource "spacelift_stack_dependency_reference" "eks_addons_lb_controller_role_arn" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
-  output_name         = "aws_lb_controller_role_arn"
-  input_name          = "TF_VAR_aws_lb_controller_role_arn"
-}
-
-resource "spacelift_stack_dependency_reference" "eks_addons_cluster_autoscaler_role_arn" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
-  output_name         = "cluster_autoscaler_role_arn"
-  input_name          = "TF_VAR_cluster_autoscaler_role_arn"
-}
-
-resource "spacelift_stack_dependency_reference" "eks_addons_external_secrets_role_arn" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.eks_addons_needs_eks[each.key].id
-  output_name         = "external_secrets_role_arn"
-  input_name          = "TF_VAR_external_secrets_role_arn"
-}
-
-# Cross-stack output references: eks-addons -> kyverno
-resource "spacelift_stack_dependency_reference" "kyverno_eks_cluster_name" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.kyverno_needs_eks_addons[each.key].id
-  output_name         = "eks_cluster_name"
-  input_name          = "TF_VAR_eks_cluster_name"
-}
-
-resource "spacelift_stack_dependency_reference" "kyverno_eks_cluster_endpoint" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.kyverno_needs_eks_addons[each.key].id
-  output_name         = "eks_cluster_endpoint"
-  input_name          = "TF_VAR_eks_cluster_endpoint"
-}
-
-resource "spacelift_stack_dependency_reference" "kyverno_cluster_ca_certificate" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.kyverno_needs_eks_addons[each.key].id
-  output_name         = "cluster_ca_certificate"
-  input_name          = "TF_VAR_cluster_ca_certificate"
-}
-
-# Cross-stack output references: kyverno -> argo-cd
-# argo-cd and prometheus now depend on kyverno so the admission webhook is live
-# before any app pods are scheduled. Cluster credentials pass through from kyverno.
-resource "spacelift_stack_dependency_reference" "argo_cd_eks_cluster_name" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.argo_cd_needs_kyverno[each.key].id
-  output_name         = "eks_cluster_name"
-  input_name          = "TF_VAR_eks_cluster_name"
-}
-
-resource "spacelift_stack_dependency_reference" "argo_cd_eks_cluster_endpoint" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.argo_cd_needs_kyverno[each.key].id
-  output_name         = "eks_cluster_endpoint"
-  input_name          = "TF_VAR_eks_cluster_endpoint"
-}
-
-resource "spacelift_stack_dependency_reference" "argo_cd_cluster_ca_certificate" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.argo_cd_needs_kyverno[each.key].id
-  output_name         = "cluster_ca_certificate"
-  input_name          = "TF_VAR_cluster_ca_certificate"
-}
-
-# Cross-stack output references: kyverno -> prometheus
-resource "spacelift_stack_dependency_reference" "prometheus_eks_cluster_name" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.prometheus_needs_kyverno[each.key].id
-  output_name         = "eks_cluster_name"
-  input_name          = "TF_VAR_eks_cluster_name"
-}
-
-resource "spacelift_stack_dependency_reference" "prometheus_eks_cluster_endpoint" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.prometheus_needs_kyverno[each.key].id
-  output_name         = "eks_cluster_endpoint"
-  input_name          = "TF_VAR_eks_cluster_endpoint"
-}
-
-resource "spacelift_stack_dependency_reference" "prometheus_cluster_ca_certificate" {
-  for_each            = var.environments
-  stack_dependency_id = spacelift_stack_dependency.prometheus_needs_kyverno[each.key].id
-  output_name         = "cluster_ca_certificate"
-  input_name          = "TF_VAR_cluster_ca_certificate"
+  stack_dependency_id = spacelift_stack_dependency.this["${each.value.dep}-${each.value.env}"].id
+  output_name         = each.value.output
+  input_name          = each.value.input
 }
 
 # Dev plan policy — warn-only, no hard blocks.

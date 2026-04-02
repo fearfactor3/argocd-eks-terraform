@@ -19,6 +19,16 @@ resource "kubernetes_namespace_v1" "prometheus" {
 }
 
 locals {
+  namespace = kubernetes_namespace_v1.prometheus.metadata[0].name
+
+  # TLS annotations added to the ALB Ingress when an ACM certificate is provided.
+  # Omitting certificate_arn leaves the ALB as HTTP-only (suitable for initial bootstrap).
+  tls_annotations = var.certificate_arn != null && var.certificate_arn != "" ? {
+    "alb.ingress.kubernetes.io/certificate-arn" = var.certificate_arn
+    "alb.ingress.kubernetes.io/listen-ports"    = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
+    "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
+  } : {}
+
   # Alloy River config: read VPC flow logs from CloudWatch and ship to Loki.
   # The log group name mirrors what the network module creates:
   #   /aws/vpc-flow-logs/<cluster_name>
@@ -91,7 +101,7 @@ resource "helm_release" "prometheus" {
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "kube-prometheus-stack"
   version          = var.prometheus_chart_version
-  namespace        = kubernetes_namespace_v1.prometheus.metadata[0].name
+  namespace        = local.namespace
   create_namespace = false
   timeout          = 2000
 
@@ -114,11 +124,7 @@ resource "helm_release" "prometheus" {
             "alb.ingress.kubernetes.io/target-type"  = "ip"
             "alb.ingress.kubernetes.io/listen-ports" = jsonencode([{ HTTP = 80 }])
           },
-          var.certificate_arn != null && var.certificate_arn != "" ? {
-            "alb.ingress.kubernetes.io/certificate-arn" = var.certificate_arn
-            "alb.ingress.kubernetes.io/listen-ports"    = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
-            "alb.ingress.kubernetes.io/ssl-redirect"    = "443"
-          } : {}
+          local.tls_annotations
         )
         hosts = ["grafana.${var.environment}.internal"]
       }
@@ -179,7 +185,7 @@ resource "helm_release" "loki" {
   repository       = "https://grafana.github.io/helm-charts"
   chart            = "loki"
   version          = var.loki_chart_version
-  namespace        = kubernetes_namespace_v1.prometheus.metadata[0].name
+  namespace        = local.namespace
   create_namespace = false
 
   values = [yamlencode({
@@ -253,7 +259,7 @@ resource "helm_release" "alloy" {
   repository       = "https://grafana.github.io/helm-charts"
   chart            = "alloy"
   version          = var.alloy_chart_version
-  namespace        = kubernetes_namespace_v1.prometheus.metadata[0].name
+  namespace        = local.namespace
   create_namespace = false
 
   values = [yamlencode({

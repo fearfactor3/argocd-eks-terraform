@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 STACKS     := network eks eks-addons kyverno argo-cd prometheus spacelift
-ENV_STACKS := network eks eks-addons kyverno argo-cd prometheus
+ENV_STACKS := $(filter-out spacelift,$(STACKS))
 
 .PHONY: help \
         init validate \
