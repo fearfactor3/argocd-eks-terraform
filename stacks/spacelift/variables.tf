@@ -14,6 +14,11 @@ variable "spacelift_space_id" {
   default     = "root"
 }
 
+variable "spacelift_management_stack_id" {
+  description = "Stack ID (slug) of the self-managing Spacelift stack (the one running this code). Created manually in the UI — not in TF state. Find it in the Spacelift UI under the stack's Settings → General, or from the stack URL: https://<org>.app.spacelift.io/stack/<stack-id>."
+  type        = string
+}
+
 variable "repository" {
   description = "GitHub repository name (e.g. argocd-eks-terraform)"
   type        = string
