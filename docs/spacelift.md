@@ -61,6 +61,31 @@ In a single-operator setup, lower the threshold in
 
 ---
 
+## Authorization
+
+The management stack (the stack running `stacks/spacelift/`) uses a `space-admin` role attachment instead of the deprecated `administrative = true` flag, which Spacelift removed in 2026.
+
+The role and attachment are managed in `stacks/spacelift/roles.tf`. The management stack itself was created manually in the Spacelift UI and is not in TF state, so its stack ID is supplied via `var.spacelift_management_stack_id`. Set this in the Spacelift environment for the management stack, or in a local tfvars file when running locally:
+
+```sh
+# Find the stack ID in the Spacelift UI: stack Settings → General
+# or from the URL: https://<org>.app.spacelift.io/stack/<stack-id>
+export TF_VAR_spacelift_management_stack_id=<stack-id>
+```
+
+### Initial migration sequence
+
+If migrating from `administrative = true` for the first time:
+
+1. Apply `stacks/spacelift/` — creates the role and role attachment while `administrative` is still enabled
+2. Verify the role appears in the Spacelift UI: management stack → Settings → Roles
+3. Disable the administrative flag in the Spacelift UI: management stack → Settings → General → uncheck Administrative
+4. Trigger a test run to confirm the management stack can still manage stacks via the new role
+
+Step 3 is a manual UI action — the management stack cannot remove its own administrative flag via Terraform since it is not in state.
+
+---
+
 ## AWS Integration Bootstrap
 
 The management stack creates a `spacelift-integration` IAM role in AWS on its first apply. All app stacks assume this role via the `spacelift_aws_integration` resource — no long-lived credentials are stored anywhere after bootstrap.

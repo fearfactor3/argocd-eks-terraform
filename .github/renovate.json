@@ -75,6 +75,78 @@
       "packageNameTemplate": "grafana/helm-charts",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^alloy-(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "argocd-apps Helm chart version in variables.tf",
+      "fileMatch": ["stacks/argo-cd/variables\\.tf"],
+      "matchStrings": [
+        "argocd_apps_chart_version[\\s\\S]*?default\\s+=\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "argocd-apps",
+      "packageNameTemplate": "argoproj/argo-helm",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^argocd-apps-(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "AWS Load Balancer Controller Helm chart version in variables.tf",
+      "fileMatch": ["stacks/eks-addons/variables\\.tf"],
+      "matchStrings": [
+        "aws_lb_controller_chart_version[\\s\\S]*?default\\s+=\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "aws-load-balancer-controller",
+      "packageNameTemplate": "kubernetes-sigs/aws-load-balancer-controller",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^helm-chart-(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "cluster-autoscaler Helm chart version in variables.tf",
+      "fileMatch": ["stacks/eks-addons/variables\\.tf"],
+      "matchStrings": [
+        "cluster_autoscaler_chart_version[\\s\\S]*?default\\s+=\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "cluster-autoscaler",
+      "packageNameTemplate": "kubernetes/autoscaler",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^cluster-autoscaler-chart-(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "external-secrets Helm chart version in variables.tf",
+      "fileMatch": ["stacks/eks-addons/variables\\.tf"],
+      "matchStrings": [
+        "external_secrets_chart_version[\\s\\S]*?default\\s+=\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "external-secrets",
+      "packageNameTemplate": "external-secrets/external-secrets",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^helm-chart-(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Kyverno Helm chart version in variables.tf",
+      "fileMatch": ["stacks/kyverno/variables\\.tf"],
+      "matchStrings": [
+        "kyverno_chart_version[\\s\\S]*?default\\s+=\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "kyverno",
+      "packageNameTemplate": "kyverno/kyverno",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^kyverno-(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "kyverno-policies Helm chart version in variables.tf",
+      "fileMatch": ["stacks/kyverno/variables\\.tf"],
+      "matchStrings": [
+        "kyverno_policies_chart_version[\\s\\S]*?default\\s+=\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "kyverno-policies",
+      "packageNameTemplate": "kyverno/kyverno",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^kyverno-policies-(?<version>.*)$"
     }
   ]
 }

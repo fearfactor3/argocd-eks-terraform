@@ -6,7 +6,7 @@ ENV_STACKS := $(filter-out spacelift,$(STACKS))
 .PHONY: help \
         init validate \
         fmt fmt-check tflint check-policies markdownlint lint \
-        test test-modules test-policies \
+        test test-modules test-policies kyverno-test \
         plan-dev plan-prod plan-spacelift \
         clean
 
@@ -52,11 +52,14 @@ lint: fmt-check tflint check-policies markdownlint ## Run all static checks (mir
 
 # ─── Testing ──────────────────────────────────────────────────────────────────
 
-test: lint test-modules test-policies ## Run all checks including module and policy tests (full local CI)
+test: lint test-modules test-policies kyverno-test ## Run all checks including module and policy tests (full local CI)
 
 test-modules: ## Run native OpenTofu tests for all modules (no AWS credentials required)
 	@tofu -chdir=modules/network test
 	@tofu -chdir=modules/eks test
+
+kyverno-test: ## Test Kyverno ClusterPolicies with the Kyverno CLI (requires: brew install kyverno)
+	@kyverno test stacks/kyverno/tests/
 
 test-policies: ## Test Spacelift Rego policies with OPA
 	@opa test stacks/spacelift/policies/dev-plan.rego stacks/spacelift/policies/dev-plan_test.rego -v

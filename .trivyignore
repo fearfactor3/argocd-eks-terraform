@@ -18,6 +18,23 @@ AVD-AWS-0164
 # no material security benefit for this test environment — logs are not PII/PCI-scoped.
 AVD-AWS-0017
 
+# Kyverno policy test fixtures are intentionally misconfigured — each exists to
+# trigger a specific policy violation and must not pass the checks it is designed
+# to fail. Scoped to the test resources directory so real workload manifests
+# elsewhere in the repo still receive full trivy coverage.
+KSV-0011 path:stacks/kyverno/tests/resources/
+KSV-0012 path:stacks/kyverno/tests/resources/
+KSV-0013 path:stacks/kyverno/tests/resources/
+KSV-0015 path:stacks/kyverno/tests/resources/
+KSV-0016 path:stacks/kyverno/tests/resources/
+KSV-0018 path:stacks/kyverno/tests/resources/
+KSV-0020 path:stacks/kyverno/tests/resources/
+KSV-0021 path:stacks/kyverno/tests/resources/
+KSV-0030 path:stacks/kyverno/tests/resources/
+KSV-0104 path:stacks/kyverno/tests/resources/
+KSV-0105 path:stacks/kyverno/tests/resources/
+KSV-0125 path:stacks/kyverno/tests/resources/
+
 # NetworkPolicy egress to 0.0.0.0/0 is intentional in three policies:
 #   - argocd/allow-https-egress: kube-apiserver + Git remotes (variable IPs, port 443 only)
 #   - prometheus/allow-https-egress: kube-apiserver + CloudWatch (variable IPs, port 443 only)
